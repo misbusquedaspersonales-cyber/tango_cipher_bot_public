@@ -1,7 +1,7 @@
 // Run with: node --test tests/cipherEngine.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cifrarMensaje, descifrarMensaje } from '../cipherEngine.js';
+import { cifrarMensaje, descifrarMensaje } from '../pwa/cipherEngine.js';
 
 const BASE = {
     "3": {

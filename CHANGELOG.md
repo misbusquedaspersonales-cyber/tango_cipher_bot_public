@@ -15,6 +15,8 @@
 - `scripts/build_encrypted_bundle.py` — cifra `tangos.json` + SALT con AES-256-GCM (PBKDF2-HMAC-SHA256) produciendo un bundle JSON deployable. Corre en GitHub Actions, nunca en el browser.
 - `scripts/decrypt_bundle_cli.py` — smoke-test CLI: descifra un bundle producido por el script anterior para verificar integridad antes del deploy.
 - `.github/workflows/build-encrypted-bundle.yml` — GitHub Actions workflow que genera el bundle cifrado en cada push al repo privado.
+- `build-encrypted-bundle.yml` root duplicate removed to prevent stale/dead workflow drift; only the `.github/workflows/` copy is active.
+- `pwa/index.html` updated with iOS PWA-specific meta tags (`apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style`, `apple-mobile-web-app-title`) to improve standalone install behavior on iOS Safari.
 - `secure-vault.js` — módulo JS con dos capas de protección:
   - **Layer 1** (`unlockDeployBundle`): descifra el bundle público con `CLAVE_DESPLIEGUE`. Se ejecuta una sola vez en el primer arranque de la PWA.
   - **Layer 2** (`sealForDevice`/`openDeviceVault`): re-cifra el payload bajo un PIN de dispositivo. Disponible para despliegues que priorizan protección at-rest.

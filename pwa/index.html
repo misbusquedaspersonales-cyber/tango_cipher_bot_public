@@ -4,6 +4,15 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#1a110f" />
+
+<!-- iOS-specific PWA meta tags. Safari ignores several manifest.json
+     fields (notably `display: standalone` and `orientation`), so these
+     are required -- not cosmetic -- for the installed icon to launch in
+     standalone mode instead of a plain Safari tab with browser chrome. -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Tango" />
+
 <title>Tango Cifrado</title>
 <link rel="manifest" href="./manifest.json" />
 <link rel="icon" href="./icons/icon-192.png" />
@@ -361,3 +370,4 @@
 <script type="module" src="./app.js"></script>
 </body>
 </html>
+
