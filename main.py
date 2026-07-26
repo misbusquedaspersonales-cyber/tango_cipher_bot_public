@@ -1,5 +1,9 @@
 import os
 from dotenv import load_dotenv
+
+# cipher_engine.py and tangos.json live in the private repo, cloned locally
+# into private_core/ (gitignored — see scripts/setup_private_core.sh).
+# This import intentionally fails until that clone step has been run.
 from private_core.cipher_engine import cargar_tangos, cifrar_mensaje, descifrar_mensaje
 from telegram_client import enviar_mensaje
 
@@ -8,9 +12,11 @@ load_dotenv()
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
+TANGOS_PATH = os.path.join(os.path.dirname(__file__), "private_core", "tangos.json")
+
 
 if __name__ == "__main__":
-    base = cargar_tangos("private_core/tangos.json")
+    base = cargar_tangos(TANGOS_PATH)
     print("=== SISTEMA DE CIFRADO POR TANGOS (TELEGRAM) ===")
     id_tango = input("Ingrese la clave de Tango (ej: 3): ")
     mensaje = input("Ingrese el mensaje a enviar: ")
