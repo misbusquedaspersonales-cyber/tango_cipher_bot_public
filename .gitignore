@@ -1,0 +1,11 @@
+# Secrets -- never commit real credentials
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+
+# Node (for cipherEngine.js tooling, if added later)
+node_modules/

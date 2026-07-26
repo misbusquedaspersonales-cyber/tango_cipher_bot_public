@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#1a110f" />
+<title>Tango Cifrado</title>
+<link rel="manifest" href="./manifest.json" />
+<link rel="icon" href="./icons/icon-192.png" />
+<link rel="apple-touch-icon" href="./icons/icon-192.png" />
+<style>
+  @font-face {
+    font-family: "Gloock";
+    src: url("./fonts/Gloock-Regular.ttf") format("truetype");
+    font-weight: 400;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Crimson Pro";
+    src: url("./fonts/CrimsonPro-Regular.ttf") format("truetype");
+    font-weight: 400;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Crimson Pro";
+    src: url("./fonts/CrimsonPro-Bold.ttf") format("truetype");
+    font-weight: 700;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Crimson Pro";
+    src: url("./fonts/CrimsonPro-Italic.ttf") format("truetype");
+    font-weight: 400;
+    font-style: italic;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "IBM Plex Mono";
+    src: url("./fonts/IBMPlexMono-Regular.ttf") format("truetype");
+    font-weight: 400;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "IBM Plex Mono";
+    src: url("./fonts/IBMPlexMono-Bold.ttf") format("truetype");
+    font-weight: 700;
+    font-display: swap;
+  }
+
+  :root {
+    --bg: #1a110f;
+    --surface: #241715;
+    --surface-2: #2e1e19;
+    --line: #40291f;
+    --ink: #f3e9db;
+    --muted: #b7a08a;
+    --brass: #c98a3b;
+    --brass-soft: #8a5f2b;
+    --wine: #a3495a;
+    --good: #7f9f6d;
+
+    --display: "Gloock", Georgia, serif;
+    --body: "Crimson Pro", Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+  }
+
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    display: flex;
+    justify-content: center;
+  }
+
+  main {
+    width: 100%;
+    max-width: 480px;
+    padding: 2rem 1.25rem 3rem;
+  }
+
+  header.app-header {
+    text-align: center;
+    margin-bottom: 1.75rem;
+  }
+
+  header.app-header h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 2rem;
+    letter-spacing: 0.02em;
+    margin: 0 0 0.4rem;
+  }
+
+  header.app-header .rule {
+    width: 64px;
+    height: 2px;
+    background: var(--brass);
+    margin: 0 auto 0.6rem;
+    border: none;
+  }
+
+  header.app-header p {
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin: 0;
+    font-style: italic;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.5rem;
+  }
+
+  .card + .card { margin-top: 1rem; }
+
+  label {
+    display: block;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+  }
+
+  input[type="password"],
+  input[type="text"],
+  textarea,
+  select {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 1.05rem;
+    padding: 0.7rem 0.8rem;
+  }
+
+  textarea { min-height: 6.5rem; resize: vertical; }
+
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--brass);
+    outline-offset: 2px;
+  }
+
+  .field { margin-bottom: 1rem; }
+  .field:last-child { margin-bottom: 0; }
+
+  button {
+    font-family: var(--body);
+    font-weight: 700;
+    font-size: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--brass-soft);
+    background: transparent;
+    color: var(--ink);
+    padding: 0.7rem 1rem;
+    cursor: pointer;
+  }
+
+  button.primary {
+    background: var(--brass);
+    color: #1a110f;
+    border-color: var(--brass);
+  }
+
+  button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  button.link {
+    border: none;
+    background: none;
+    color: var(--muted);
+    text-decoration: underline;
+    padding: 0.2rem 0;
+    font-weight: 400;
+    font-size: 0.9rem;
+  }
+
+  .status {
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+    min-height: 1.2rem;
+  }
+  .status[data-kind="error"] { color: var(--wine); }
+  .status[data-kind="success"] { color: var(--good); }
+  .status[data-kind="info"] { color: var(--muted); }
+
+  /* --- mode tabs --- */
+  .tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.1rem;
+  }
+  .tabs button {
+    flex: 1;
+    border-color: var(--line);
+  }
+  .tabs button.is-active {
+    background: var(--surface-2);
+    border-color: var(--brass);
+    color: var(--brass);
+  }
+
+  /* --- coordinate strip: the signature element ---
+     Cipher output rendered as ticker-tape / telegram-strip tiles, since
+     that's literally the token grammar (V01P02-~20-...), not decoration. */
+  #output-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 1rem;
+    min-height: 1.6rem;
+  }
+
+  .chip {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.3rem 0.5rem;
+    color: var(--ink);
+    line-height: 1;
+  }
+
+  .chip--key {
+    border-color: var(--brass);
+    color: var(--brass);
+  }
+
+  .plain-output {
+    font-family: var(--body);
+    font-size: 1.05rem;
+    margin: 0;
+    white-space: pre-wrap;
+  }
+
+  .run-row {
+    display: flex;
+    gap: 0.6rem;
+    margin-top: 1.1rem;
+  }
+  .run-row button { flex: 1; }
+
+  #send-row {
+    display: flex;
+    gap: 0.6rem;
+    margin-top: 0.9rem;
+  }
+  #send-row button { flex: 1; }
+
+  #settings-panel { margin-top: 1rem; }
+
+  footer.hint {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin-top: 1.5rem;
+    line-height: 1.5;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .card { transition: opacity 180ms ease; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header class="app-header">
+    <h1>Tango Cifrado</h1>
+    <hr class="rule" />
+    <p>Coordenadas de tango, cifradas sobre Telegram.</p>
+  </header>
+
+  <!-- ================= FIRST RUN ================= -->
+  <section id="unlock-screen" class="card" hidden>
+    <label for="clave-despliegue">Clave de despliegue</label>
+    <p style="color:var(--muted); font-size:0.9rem; margin-top:-0.3rem;">
+      Se pide una sola vez. A partir de acá, abrí y usá — sin contraseña.
+    </p>
+    <form id="unlock-form">
+      <div class="field">
+        <input type="password" id="clave-despliegue" autocomplete="off" placeholder="•••••••••••••••••" />
+      </div>
+      <button type="submit" class="primary" id="unlock-submit" style="width:100%;">Desbloquear</button>
+    </form>
+    <p class="status" id="unlock-status" role="status" aria-live="polite"></p>
+  </section>
+
+  <!-- ================= MAIN APP ================= -->
+  <section id="app-screen" hidden>
+    <div class="card">
+      <div class="tabs">
+        <button type="button" id="mode-cifrar" class="is-active">Cifrar</button>
+        <button type="button" id="mode-descifrar">Descifrar</button>
+      </div>
+
+      <div class="field" id="tango-field">
+        <label for="tango-select">Tango</label>
+        <select id="tango-select"></select>
+      </div>
+
+      <div class="field">
+        <label for="message-input" id="message-label">Mensaje</label>
+        <textarea id="message-input" placeholder="Escribí el mensaje…"></textarea>
+      </div>
+
+      <div class="run-row">
+        <button type="button" class="primary" id="run-action">Cifrar</button>
+      </div>
+
+      <div id="output-strip" aria-live="polite"></div>
+
+      <div id="send-row" hidden>
+        <button type="button" id="copy-button">Copiar</button>
+        <button type="button" class="primary" id="send-button">Enviar a Telegram</button>
+      </div>
+
+      <p class="status" id="composer-status" role="status" aria-live="polite"></p>
+    </div>
+
+    <div class="card">
+      <button type="button" class="link" id="settings-toggle">Ajustes de Telegram ▾</button>
+      <div id="settings-panel" hidden>
+        <form id="settings-form">
+          <div class="field">
+            <label for="bot-token">Bot token</label>
+            <input type="password" id="bot-token" autocomplete="off" placeholder="123456:ABC…" />
+          </div>
+          <div class="field">
+            <label for="chat-id">Chat ID</label>
+            <input type="text" id="chat-id" autocomplete="off" placeholder="123456789" />
+          </div>
+          <button type="submit" class="primary" style="width:100%;">Guardar</button>
+        </form>
+        <p class="status" id="settings-status" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+
+    <footer class="hint">
+      Si esta pantalla vuelve a pedir la clave de despliegue, es porque se borraron los datos del navegador — ver TROUBLESHOOTING.md.
+    </footer>
+  </section>
+</main>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

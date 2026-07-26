@@ -1,0 +1,3 @@
+[submodule "private_core"]
+	path = private_core
+	url = https://github.com/misbusquedaspersonales-cyber/tango_corpus_private.git
