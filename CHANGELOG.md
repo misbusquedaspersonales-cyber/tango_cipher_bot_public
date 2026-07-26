@@ -55,6 +55,8 @@
 - `cipher_engine.py` y `cipherEngine.js` — comentario añadido distinguiendo el "SALT" de enmascaramiento de ID del tango vs. un KDF salt criptográfico.
 - `main.py` — delega HTTP a `telegram_client.py`; `salt=None` explícito con comentario; credenciales desde `.env`.
 - `README.md` — referencia `.env` como única fuente de credenciales; apunta a `TROUBLESHOOTING.md`.
+- `scripts/setup_private_core.sh` — configurado con la URL del repo privado y el SHA del commit fijado (pinned) para prevenir cambios no intencionados en la lógica del backend.
+- `.env.example` — actualizado para incluir marcadores de posición para `GITHUB_TOKEN` y `CLAVE_DESPLIEGUE`.
 
 ### Initial
 - `cipher_engine.py` con algoritmo de cifrado/descifrado por coordenadas de tango y SALT=47.

@@ -6,10 +6,12 @@ Cifrado por libro basado en un corpus privado de letras de tango (`tangos.json`)
 
 El corpus y el SALT nunca viajan en texto plano: GitHub Actions los cifra con AES-256-GCM antes de publicar la PWA. En el dispositivo quedan guardados en IndexedDB tras un único desbloqueo en el primer arranque.
 
+**PWA en Vivo:** [tango_cipher_bot_public/pwa](https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html)
+
 ```
-[ Repo privado ]  →  [ GitHub Actions ]  →  [ Repo público / GitHub Pages ]
-  tangos.json           AES-256-GCM              encrypted-bundle.json
-  SALT secreto          PBKDF2-HMAC-SHA256        PWA estática
+[ Repo privado ]  →  [ setup_private_core.sh / CI ]  →  [ Repo público / GitHub Pages ]
+  tangos.json           AES-256-GCM (build bundle)           encrypted-bundle.json
+  SALT secreto          PBKDF2-HMAC-SHA256                   PWA estática
   código fuente         CLAVE_DESPLIEGUE
 ```
 
@@ -25,6 +27,7 @@ El corpus y el SALT nunca viajan en texto plano: GitHub Actions los cifra con AE
 | `secure-vault.js` | Gestión de credenciales en el browser (Layer 1: bundle deploy, Layer 2: PIN opcional, flujo sin fricción por defecto). |
 | `scripts/build_encrypted_bundle.py` | Genera el bundle cifrado para deploy. Corre en CI, nunca en el browser. |
 | `scripts/decrypt_bundle_cli.py` | Smoke-test CLI para verificar el bundle antes de publicarlo. |
+| `scripts/setup_private_core.sh` | Configura el entorno local clonando el repo privado en un estado "vendored" (pinneado a un commit SHA). |
 | `.github/workflows/build-encrypted-bundle.yml` | GitHub Actions workflow de build. |
 | `tests/` | 37 tests: cifrado, round-trip, pipeline de bundle, errores de red. |
 

@@ -98,3 +98,14 @@ O instalar dentro del virtualenv:
 ```bash
 python3 -m venv venv && source venv/bin/activate && pip install requests python-dotenv cryptography
 ```
+
+---
+
+## Problema 8: La URL de GitHub Pages muestra 404 (Not Found) o está desactualizada
+
+El despliegue en GitHub Pages puede tardar un par de minutos después de realizar el push.
+1. Abre tu repositorio público en GitHub.
+2. Ve a la pestaña **Settings** -> **Pages**.
+3. Verifica que diga "Your site is live at...".
+4. Asegúrate de navegar a `/pwa/index.html` si los archivos de la app se encuentran en la carpeta `pwa/` (ejemplo: `https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html`).
+5. Si ves una versión vieja, fuerza la actualización en tu móvil (limpiar caché o arrastrar hacia abajo para refrescar en Safari/Chrome).

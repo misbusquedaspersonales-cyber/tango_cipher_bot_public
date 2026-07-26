@@ -25,8 +25,8 @@ El pipeline de despliegue los cifra antes de publicar.
   código fuente          con CLAVE_DESPLIEGUE
 ```
 
-- [ ] Crear repo privado con el código fuente — ej: `tangos-cipher-source`
-- [ ] Crear repo público vacío para GitHub Pages — ej: `tangos-cipher-pwa`
+- [x] Crear repo privado con el código fuente — ej: `tangos-cipher-source`
+- [x] Crear repo público vacío para GitHub Pages — ej: `tangos-cipher-pwa`
   > Ambos repos deben compartir el mismo prefijo (ej: `tangos-`) para aparecer juntos en la lista de repositorios de GitHub.
 - [x] `scripts/build_encrypted_bundle.py` — cifra `tangos.json` + SALT con AES-256-GCM
 - [x] `scripts/decrypt_bundle_cli.py` — smoke-test CLI para verificar el bundle antes del deploy
@@ -57,15 +57,15 @@ El pipeline de despliegue los cifra antes de publicar.
   - Cache-first para el shell, network-first para `encrypted-bundle.json`
 - [x] Fuentes self-hosted (Gloock, Crimson Pro, IBM Plex Mono) — funciona sin CDN
 
-## Fase 6: Despliegue y Distribución
-- [ ] Crear repo privado con el código fuente — ej: `tangos-cipher-source`
-- [ ] Crear repo público vacío para GitHub Pages — ej: `tangos-cipher-pwa`
+## Fase 6: Despliegue y Distribución ✅ Completado
+- [x] Crear repo privado con el código fuente — ej: `tangos-cipher-source`
+- [x] Crear repo público vacío para GitHub Pages — ej: `tangos-cipher-pwa`
   > Ambos repos deben compartir el mismo prefijo para aparecer juntos en la lista de repositorios de GitHub.
-- [ ] Configurar `CLAVE_DESPLIEGUE` y `CIFRADO_SALT` como secretos en GitHub Actions
-- [ ] Configurar `ACTIONS_DEPLOY_KEY` para push cross-repo al repo público
-- [ ] Copiar `pwa/` + `pwa/encrypted-bundle.json` al repo público
-- [ ] GitHub Pages activo — URL pública accesible desde móvil
-- [ ] Instalable como PWA desde pantalla de inicio sin tiendas oficiales
+- [x] Configurar `CLAVE_DESPLIEGUE` y `CIFRADO_SALT` como secretos en GitHub Actions
+- [x] Configurar `ACTIONS_DEPLOY_KEY` para push cross-repo al repo público (o usar arquitectura vendored)
+- [x] Copiar `pwa/` + `pwa/encrypted-bundle.json` al repo público
+- [x] GitHub Pages activo — URL pública accesible desde móvil
+- [x] Instalable como PWA desde pantalla de inicio sin tiendas oficiales
 
 ## Principios que guían el proyecto
 - **Zero-Trust sobre Telegram:** solo transita texto cifrado, nunca el mensaje original
