@@ -44,6 +44,13 @@ const PIN_SALT_LEN = 16;
 const NONCE_LEN = 12;
 const DEVICE_VAULT_AAD = new TextEncoder().encode("tango-cifrado-device-vault-v1");
 
+// Bundle format versions this client knows how to unlock. Bump
+// build_encrypted_bundle.py's "version" field only when the payload shape
+// or crypto scheme actually changes, and add the new number here at the
+// same time -- this is what lets an old PWA fail with a clear message
+// instead of a confusing KDF/decrypt error if a future bundle format shows up.
+const SUPPORTED_BUNDLE_VERSIONS = [1];
+
 // ---------- helpers ----------
 
 function b64ToBytes(b64) {
@@ -85,6 +92,13 @@ async function deriveAesKey(passphrase, saltBytes, iterations) {
  * @returns {Promise<{tangos: object, salt: number}>}
  */
 export async function unlockDeployBundle(claveDespliegue, bundle) {
+    if (!SUPPORTED_BUNDLE_VERSIONS.includes(bundle.version)) {
+        throw new Error(
+            `Versión de bundle no soportada: ${bundle.version}. ` +
+            `Esta versión de la app solo entiende: ${SUPPORTED_BUNDLE_VERSIONS.join(', ')}. ` +
+            `Actualizá la PWA a la última versión.`
+        );
+    }
     if (bundle.kdf !== 'PBKDF2-HMAC-SHA256') {
         throw new Error(`KDF no soportado: ${bundle.kdf}`);
     }
