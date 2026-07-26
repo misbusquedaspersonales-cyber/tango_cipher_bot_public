@@ -43,7 +43,13 @@ const SHELL_FILES = [
 self.addEventListener("install", (event) => {
     event.waitUntil(
         caches.open(SHELL_CACHE)
-            .then((cache) => cache.addAll(SHELL_FILES))
+            .then((cache) =>
+                Promise.all(
+                    SHELL_FILES.map((url) =>
+                        fetch(url, { cache: "reload" }).then((response) => cache.put(url, response))
+                    )
+                )
+            )
             .then(() => self.skipWaiting())
     );
 });

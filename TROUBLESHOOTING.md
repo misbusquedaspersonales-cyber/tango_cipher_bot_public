@@ -1,5 +1,7 @@
 # TROUBLESHOOTING
 
+> Nota: si querés revisar los problemas pendientes y los items de mejora no bloqueantes, consultá [TO_FIX.md](TO_FIX.md). Allí se mantiene el seguimiento de los issues de prioridad media/baja que no afectan el uso normal de la app.
+
 ## Problema 1: No tengo el CHAT_ID de Telegram
 
 ### Paso 1: Inicia una conversación con tu bot

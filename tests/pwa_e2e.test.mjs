@@ -33,10 +33,11 @@ async function makeBundle(passphrase, payload) {
   const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(passphrase), { name: 'PBKDF2' }, false, ['deriveBits','deriveKey']);
   const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: kdfSalt, iterations: 600000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
   const nonce = crypto.getRandomValues(new Uint8Array(12));
-  const aad = new TextEncoder().encode('tango-cifrado-deploy-aad');
+  const aad = new TextEncoder().encode('tango-cifrado-bundle-v1');
   const plaintext = new TextEncoder().encode(JSON.stringify(payload));
   const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, additionalData: aad }, key, plaintext);
   return {
+    version: 1,
     kdf: 'PBKDF2-HMAC-SHA256',
     kdf_salt_b64: bytesToB64(kdfSalt),
     kdf_iterations: 600000,
@@ -45,6 +46,23 @@ async function makeBundle(passphrase, payload) {
     ciphertext_b64: bytesToB64(new Uint8Array(ciphertext)),
   };
 }
+
+test('unlockDeployBundle: unsupported version is rejected before any decrypt attempt', async () => {
+  const pass = 'test-deploy-pass';
+  const bundle = await makeBundle(pass, { tangos: {}, salt: 47 });
+
+  bundle.version = 2;
+  await assert.rejects(
+    () => unlockDeployBundle(pass, bundle),
+    /Versión de bundle no soportada/
+  );
+
+  delete bundle.version;
+  await assert.rejects(
+    () => unlockDeployBundle(pass, bundle),
+    /Versión de bundle no soportada/
+  );
+});
 
 test('PWA E2E: first-run unlock → save → cipher/descipher → malformed handling → telegram persistence', async () => {
   const payload = {
@@ -81,4 +99,14 @@ test('PWA E2E: first-run unlock → save → cipher/descipher → malformed hand
   localStorage.setItem('tango-cifrado:telegram-config', JSON.stringify(cfg));
   const raw = localStorage.getItem('tango-cifrado:telegram-config');
   assert.equal(JSON.parse(raw).chatId, '123');
+});
+
+test('unlockDeployBundle: accepts NFC/NFD variants of the deploy passphrase', async () => {
+  const payload = { tangos: {}, salt: 47 };
+  const passNfc = 'café';
+  const passNfd = 'cafe\u0301';
+  const bundle = await makeBundle(passNfc, payload);
+
+  const unlocked = await unlockDeployBundle(passNfd, bundle);
+  assert.deepEqual(unlocked, payload);
 });

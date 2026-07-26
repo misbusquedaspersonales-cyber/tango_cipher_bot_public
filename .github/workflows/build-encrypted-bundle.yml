@@ -43,7 +43,7 @@ jobs:
         run: |
           python3 scripts/build_encrypted_bundle.py \
             --tangos tangos.json \
-            --salt 47 \
+            --salt ${{ secrets.CIFRADO_SALT }} \
             --out pwa/encrypted-bundle.json
 
       - name: Smoke-test the bundle decrypts correctly

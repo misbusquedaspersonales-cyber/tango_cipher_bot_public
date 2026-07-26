@@ -67,7 +67,8 @@ function bytesToB64(bytes) {
 }
 
 async function deriveAesKey(passphrase, saltBytes, iterations) {
-    const passBytes = new TextEncoder().encode(passphrase);
+    const passNormalized = passphrase.normalize('NFKC');
+    const passBytes = new TextEncoder().encode(passNormalized);
     const keyMaterial = await crypto.subtle.importKey(
         'raw', passBytes, { name: 'PBKDF2' }, false, ['deriveKey']
     );

@@ -1,6 +1,9 @@
 import os
+import sys
 import pytest
-from cipher_engine import cifrar_mensaje, descifrar_mensaje, iter_tangos, DEFAULT_SALT
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from private_core.cipher_engine import cifrar_mensaje, descifrar_mensaje, iter_tangos, DEFAULT_SALT
 
 # Corpus mínimo autocontenido — sin dependencia de tangos.json en disco
 BASE = {
@@ -31,6 +34,12 @@ def test_cifrar_palabra_fuera_de_corpus_usa_xor_hex():
     assert fallback.startswith("#")
     # The fallback is now PBKDF2-derived — verify via round-trip, not manual XOR
     assert descifrar_mensaje(resultado, BASE) == "magnifico"
+
+
+def test_fallback_keystream_depende_del_contexto_del_mensaje():
+    resultado_a = cifrar_mensaje("3", "hola magnifico", BASE)
+    resultado_b = cifrar_mensaje("3", "mundo magnifico", BASE)
+    assert resultado_a.split("-")[3] != resultado_b.split("-")[3]
 
 
 def test_cifrar_mensaje_mixto():

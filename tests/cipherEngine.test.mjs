@@ -31,6 +31,12 @@ test('round-trip: palabra fuera del corpus (fallback)', async () => {
     assert.equal(await descifrarMensaje(await cifrarMensaje('3', msg, BASE, SALT), BASE, SALT), msg);
 });
 
+test('fallback: el keystream cambia con el contexto del mensaje', async () => {
+    const a = await cifrarMensaje('3', 'hola magnifico', BASE, SALT);
+    const b = await cifrarMensaje('3', 'mundo magnifico', BASE, SALT);
+    assert.notEqual(a.split('-')[3], b.split('-')[3]);
+});
+
 test('round-trip: dígitos consecutivos agrupados', async () => {
     const msg = 'reunion a las 15:30 en la calle 8';
     assert.equal(await descifrarMensaje(await cifrarMensaje('3', msg, BASE, SALT), BASE, SALT), msg);

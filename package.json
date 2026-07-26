@@ -2,5 +2,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.0.0"
   }
 }

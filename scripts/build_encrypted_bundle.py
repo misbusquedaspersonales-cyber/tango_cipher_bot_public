@@ -54,6 +54,8 @@ import json
 import os
 import secrets
 import sys
+import unicodedata
+from datetime import datetime, timezone
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -70,17 +72,30 @@ AAD = b"tango-cifrado-bundle-v1"
 
 
 def derivar_clave(clave_despliegue: str, kdf_salt: bytes) -> bytes:
+    clave_nfkc = unicodedata.normalize("NFKC", clave_despliegue)
     return hashlib.pbkdf2_hmac(
         "sha256",
-        clave_despliegue.encode("utf-8"),
+        clave_nfkc.encode("utf-8"),
         kdf_salt,
         KDF_ITERATIONS,
         dklen=KEY_LEN,
     )
 
 
+def resolver_ruta_tangos(tangos_path: str) -> str:
+    if os.path.exists(tangos_path):
+        return tangos_path
+
+    fallback = os.path.join(os.path.dirname(__file__), "..", "private_core", "tangos.json")
+    if os.path.exists(fallback):
+        return fallback
+
+    return tangos_path
+
+
 def construir_bundle(tangos_path: str, tango_salt: int, clave_despliegue: str) -> dict:
-    with open(tangos_path, "r", encoding="utf-8") as f:
+    ruta_real = resolver_ruta_tangos(tangos_path)
+    with open(ruta_real, "r", encoding="utf-8") as f:
         tangos = json.load(f)
 
     payload = json.dumps({"tangos": tangos, "salt": tango_salt}, ensure_ascii=False).encode("utf-8")
@@ -100,6 +115,7 @@ def construir_bundle(tangos_path: str, tango_salt: int, clave_despliegue: str) -
         "nonce_b64": base64.b64encode(nonce).decode("ascii"),
         "ciphertext_b64": base64.b64encode(ciphertext).decode("ascii"),
         "aad": AAD.decode("ascii"),
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
 
 

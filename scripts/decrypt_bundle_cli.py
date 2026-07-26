@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 import sys
+import unicodedata
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.exceptions import InvalidTag
@@ -29,9 +30,10 @@ def descifrar_bundle(bundle: dict, clave_despliegue: str) -> dict:
     ciphertext = base64.b64decode(bundle["ciphertext_b64"])
     aad = bundle["aad"].encode("ascii")
 
+    clave_nfkc = unicodedata.normalize("NFKC", clave_despliegue)
     key = hashlib.pbkdf2_hmac(
         "sha256",
-        clave_despliegue.encode("utf-8"),
+        clave_nfkc.encode("utf-8"),
         kdf_salt,
         bundle["kdf_iterations"],
         dklen=KEY_LEN,

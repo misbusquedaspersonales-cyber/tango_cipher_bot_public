@@ -22,28 +22,32 @@
  * Each token gets a unique keystream based on its position (tokenIndex),
  * making brute-force require knowing both SALT and token position.
  */
-async function deriveKeystream(salt, tokenIndex, length) {
+const FALLBACK_KDF_ITERATIONS = 10000;
+
+async function deriveKeystream(salt, tokenIndex, length, context) {
     const enc = new TextEncoder();
+    const saltText = String(salt);
+    const contextText = context ?? saltText;
     const keyMaterial = await crypto.subtle.importKey(
-        'raw', enc.encode(String(salt)), { name: 'PBKDF2' }, false, ['deriveBits']
+        'raw', enc.encode(saltText), { name: 'PBKDF2' }, false, ['deriveBits']
     );
     const bits = await crypto.subtle.deriveBits(
-        { name: 'PBKDF2', salt: enc.encode(String(tokenIndex)), iterations: 1, hash: 'SHA-256' },
+        { name: 'PBKDF2', salt: enc.encode(`${contextText}:${tokenIndex}`), iterations: FALLBACK_KDF_ITERATIONS, hash: 'SHA-256' },
         keyMaterial,
         length * 8
     );
     return new Uint8Array(bits);
 }
 
-async function xorFallback(text, salt, tokenIndex) {
+async function xorFallback(text, salt, tokenIndex, context) {
     const bytes = new TextEncoder().encode(text);
-    const keystream = await deriveKeystream(salt, tokenIndex, bytes.length);
+    const keystream = await deriveKeystream(salt, tokenIndex, bytes.length, context);
     return Array.from(bytes).map((b, i) => (b ^ keystream[i]).toString(16).padStart(2, '0')).join('');
 }
 
-async function xorUnfallback(hexVal, salt, tokenIndex) {
+async function xorUnfallback(hexVal, salt, tokenIndex, context) {
     const raw = new Uint8Array(hexVal.match(/.{2}/g).map(h => parseInt(h, 16)));
-    const keystream = await deriveKeystream(salt, tokenIndex, raw.length);
+    const keystream = await deriveKeystream(salt, tokenIndex, raw.length, context);
     return new TextDecoder().decode(raw.map((b, i) => b ^ keystream[i]));
 }
 
@@ -102,7 +106,7 @@ export async function cifrarMensaje(idTango, mensaje, baseTangos, salt) {
 
         if (type === 'digits') {
             // Digits never appear in tango lyrics; encrypt directly as fallback.
-            const hexCifrado = await xorFallback(value, saltNum, tokens.length);
+            const hexCifrado = await xorFallback(value, saltNum, tokens.length, `${idStr}:${tokens.join('-')}`);
             tokens.push(`#${hexCifrado}`);
             continue;
         }
@@ -128,7 +132,7 @@ export async function cifrarMensaje(idTango, mensaje, baseTangos, salt) {
         });
 
         if (!encontrada) {
-            const hexCifrado = await xorFallback(palabraLower, saltNum, tokens.length);
+            const hexCifrado = await xorFallback(palabraLower, saltNum, tokens.length, `${idStr}:${tokens.join('-')}`);
             tokens.push(`#${hexCifrado}${flag}`);
         }
     }
@@ -191,7 +195,7 @@ export async function descifrarMensaje(codigoCifrado, baseTangos, salt) {
             if (!hex || hex.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(hex)) {
                 throw new Error(`Token fallback hex malformado: '#${hex}'`);
             }
-            const palabra = await xorUnfallback(hex, saltNum, tokenIndex);
+            const palabra = await xorUnfallback(hex, saltNum, tokenIndex, `${idTango}:${partes.slice(1, i).join('-')}`);
             resultado.push(applyCase(palabra, flag));
         } else {
             const match = token.match(/^V(\d+)P(\d+)$/);

@@ -29,9 +29,15 @@ El corpus y el SALT nunca viajan en texto plano: GitHub Actions los cifra con AE
 | `scripts/decrypt_bundle_cli.py` | Smoke-test CLI para verificar el bundle antes de publicarlo. |
 | `scripts/setup_private_core.sh` | Configura el entorno local clonando el repo privado en un estado "vendored" (pinneado a un commit SHA). |
 | `.github/workflows/build-encrypted-bundle.yml` | GitHub Actions workflow de build. |
-| `tests/` | 37 tests: cifrado, round-trip, pipeline de bundle, errores de red. |
+| `tests/` | 64 tests: 45 Python + 19 JS, cubriendo cifrado, round-trip, pipeline de bundle, errores de red. |
 
 ## Setup del CLI (desarrollo / pruebas)
+
+Antes de trabajar con commits locales, activa la guardia de seguridad para evitar filtrar el corpus privado:
+
+```bash
+git config core.hooksPath hooks
+```
 
 ```bash
 python3 -m venv venv

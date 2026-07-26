@@ -29,11 +29,16 @@ import { unlockDeployBundle, savePayloadDirect, loadPayloadDirect, hasPayloadDir
 
 const TELEGRAM_CONFIG_KEY = "tango-cifrado:telegram-config";
 const BUNDLE_URL = "./encrypted-bundle.json";
+// Telegram's sendMessage caps text at 4096 UTF-8 characters -- checked
+// upfront so a long message fails with a clear reason instead of a bare
+// HTTP 400 after the user already hit "Enviar".
+const TELEGRAM_MAX_LEN = 4096;
 
 // ---------- state ----------
 
 let payload = null; // { tangos, salt }
 let mode = "cifrar"; // 'cifrar' | 'descifrar'
+let bundleGeneratedAt = null; // ISO string from the fetched bundle's plaintext metadata, or null
 
 // ---------- small DOM helpers ----------
 
@@ -73,13 +78,30 @@ function saveTelegramConfig(config) {
 }
 
 async function enviarATelegram(mensajeCifrado, botToken, chatId) {
+    if (mensajeCifrado.length > TELEGRAM_MAX_LEN) {
+        throw new Error(
+            `El mensaje cifrado mide ${mensajeCifrado.length} caracteres, ` +
+            `Telegram acepta un máximo de ${TELEGRAM_MAX_LEN}. Probá con un ` +
+            `mensaje más corto.`
+        );
+    }
     const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
     const resp = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chat_id: chatId, text: mensajeCifrado }),
     });
-    if (!resp.ok) throw new Error(`Telegram respondió con error ${resp.status}`);
+    if (!resp.ok) {
+        let detalle = "";
+        try {
+            const body = await resp.json();
+            detalle = body && body.description ? body.description : "";
+        } catch {
+            // Telegram error responses are normally JSON; if parsing fails,
+            // fall back to the bare status below.
+        }
+        throw new Error(detalle ? `Telegram: ${detalle}` : `Telegram respondió con error ${resp.status}`);
+    }
 }
 
 // ---------- first-run unlock ----------
@@ -108,6 +130,12 @@ async function handleUnlockSubmit(event) {
 
         setStatus(statusEl, "Descifrando…", "info");
         payload = await unlockDeployBundle(claveDespliegue, bundle);
+
+        if (bundle.generated_at) {
+            bundleGeneratedAt = bundle.generated_at;
+            localStorage.setItem(BUNDLE_GENERATED_AT_KEY, bundle.generated_at);
+            showBundleGeneratedAt(bundle.generated_at);
+        }
 
         await savePayloadDirect(payload);
         claveInput.value = "";
@@ -235,10 +263,47 @@ async function handleSend() {
 
 // ---------- settings ----------
 
+const BUNDLE_GENERATED_AT_KEY = "tango-cifrado:bundle-generated-at";
+
+function showBundleGeneratedAt(iso) {
+    const bundleInfo = $("#bundle-info");
+    if (!bundleInfo || !iso) return;
+    const fecha = new Date(iso);
+    const texto = Number.isNaN(fecha.getTime())
+        ? iso
+        : fecha.toLocaleDateString("es", { year: "numeric", month: "long", day: "numeric" });
+    bundleInfo.textContent = `Corpus actualizado el ${texto}.`;
+}
+
+// Runs on every app load, unlock or frictionless alike. generated_at sits in
+// the bundle's plaintext metadata, outside the AES-GCM ciphertext -- so this
+// can check "is there a newer corpus on the server?" without touching
+// CLAVE_DESPLIEGUE or re-deriving any key. Fails silently offline; whatever
+// was last known (from localStorage) stays displayed.
+async function refreshBundleGeneratedAt() {
+    try {
+        const resp = await fetch(BUNDLE_URL);
+        if (!resp.ok) return;
+        const bundle = await resp.json();
+        if (bundle.generated_at) {
+            localStorage.setItem(BUNDLE_GENERATED_AT_KEY, bundle.generated_at);
+            showBundleGeneratedAt(bundle.generated_at);
+        }
+    } catch {
+        // Offline, or the bundle isn't reachable right now -- not fatal,
+        // the last known date (if any) is already shown from localStorage.
+    }
+}
+
 function initSettings() {
     const { botToken, chatId } = loadTelegramConfig();
     $("#bot-token").value = botToken;
     $("#chat-id").value = chatId;
+
+    // Show whatever was last known immediately (no network wait); the
+    // background refreshBundleGeneratedAt() call from init() will update
+    // this in place if a fetch succeeds and finds a newer bundle.
+    showBundleGeneratedAt(localStorage.getItem(BUNDLE_GENERATED_AT_KEY));
 
     $("#settings-toggle").addEventListener("click", () => {
         $("#settings-panel").hidden = !$("#settings-panel").hidden;
@@ -271,6 +336,11 @@ async function init() {
     $("#send-button").addEventListener("click", handleSend);
     initSettings();
 
+    // Fire-and-forget: checks whether a newer bundle exists on the server,
+    // on both the first-run and frictionless paths alike. Never awaited --
+    // this must not delay showing the unlock screen or composer.
+    refreshBundleGeneratedAt();
+
     if (await hasPayloadDirect()) {
         payload = await loadPayloadDirect();
         enterComposer();
@@ -279,11 +349,21 @@ async function init() {
     }
 
     if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./service-worker.js").catch(() => {
-            // Offline install just won't be available this session; the app
-            // still works online without it.
-        });
+        navigator.serviceWorker.register("./service-worker.js")
+            .then((registration) => {
+                // Browsers only check service-worker.js for changes in the
+                // background every ~24h by default. Forcing a check on every
+                // load means a forgotten CACHE_VERSION bump still gets
+                // noticed the next time the user opens the app, not up to a
+                // day later.
+                registration.update().catch(() => {});
+            })
+            .catch(() => {
+                // Offline install just won't be available this session; the app
+                // still works online without it.
+            });
     }
 }
 
 init();
+

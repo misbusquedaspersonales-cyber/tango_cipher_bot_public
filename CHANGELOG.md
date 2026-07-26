@@ -17,6 +17,8 @@
 - `.github/workflows/build-encrypted-bundle.yml` — GitHub Actions workflow que genera el bundle cifrado en cada push al repo privado.
 - `build-encrypted-bundle.yml` root duplicate removed to prevent stale/dead workflow drift; only the `.github/workflows/` copy is active.
 - `pwa/index.html` updated with iOS PWA-specific meta tags (`apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style`, `apple-mobile-web-app-title`) to improve standalone install behavior on iOS Safari.
+- `pwa/index.html` now includes a `bundle-info` UI element so users can see when the currently installed encrypted bundle was generated.
+- `pwa/app.js` now stores `generated_at` metadata from the decrypted bundle, displays the bundle timestamp in settings, and forces the service worker to check for updates on every app load.
 - `secure-vault.js` — módulo JS con dos capas de protección:
   - **Layer 1** (`unlockDeployBundle`): descifra el bundle público con `CLAVE_DESPLIEGUE`. Se ejecuta una sola vez en el primer arranque de la PWA.
   - **Layer 2** (`sealForDevice`/`openDeviceVault`): re-cifra el payload bajo un PIN de dispositivo. Disponible para despliegues que priorizan protección at-rest.
@@ -26,7 +28,7 @@
 - `.env.example` — plantilla de credenciales con documentación inline.
 - `TROUBLESHOOTING.md` con guía paso a paso para obtener el `CHAT_ID` de Telegram.
 - `ROADMAP.md` con fases de implementación del proyecto.
-- Suite de tests: 44 Python + 15 JS = 59 tests cubriendo cifrado, descifrado, round-trip lossless, dígitos, SALT por entorno, `iter_tangos`, pipeline de bundle, errores de red y entradas malformadas.
+- Suite de tests: 45 Python + 19 JS = 64 tests cubriendo cifrado, descifrado, round-trip lossless, dígitos, SALT por entorno, `iter_tangos`, pipeline de bundle, errores de red y entradas malformadas.
 - `pwa/` — PWA completa lista para GitHub Pages:
   - `index.html` — shell + CSS completo (mobile-first, dark mahogany/brass palette, instalable)
   - `app.js` — primer arranque, flujo sin fricción diario, UI de cifrado/descifrado, envío a Telegram
@@ -59,6 +61,10 @@
 - `README.md` — referencia `.env` como única fuente de credenciales; apunta a `TROUBLESHOOTING.md`.
 - `scripts/setup_private_core.sh` — configurado con la URL del repo privado y el SHA del commit fijado (pinned) para prevenir cambios no intencionados en la lógica del backend.
 - `.env.example` — actualizado para incluir marcadores de posición para `GITHUB_TOKEN` y `CLAVE_DESPLIEGUE`.
+- Guardrail de seguridad para prevenir fugas del repo privado: se documentó la configuración de `git config core.hooksPath hooks` en [README.md](README.md) para activar el hook `hooks/pre-commit` que bloquea commits de `private_core/`.
+- Soporte para normalización Unicode NFKC en la derivación de claves de despliegue para que `CLAVE_DESPLIEGUE` funcione igual entre NFC/NFD en distintos sistemas.
+- Cobertura de regresión para el nuevo contexto de keystream fallback y la compatibilidad de passphrases de despliegue en los tests Python y Node.
+- La lógica de build y decrypt del bundle ahora resuelve el corpus vendored desde `private_core/tangos.json` cuando se ejecuta desde esta estructura de repo público.
 
 ### Initial
 - `cipher_engine.py` con algoritmo de cifrado/descifrado por coordenadas de tango y SALT=47.
