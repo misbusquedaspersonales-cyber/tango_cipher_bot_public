@@ -1,11 +1,17 @@
-# Secrets -- never commit real credentials
-.env
+# Local clone of the private repo (cipher_engine.py + tangos.json).
+# Populated by scripts/setup_private_core.sh — NEVER committed.
+# This is the whole point of the split: if this line is ever removed
+# or this folder ever gets force-added, the secret corpus goes public.
+private_core/
 
 # Python
 __pycache__/
 *.pyc
-.pytest_cache/
 venv/
+.env
 
-# Node (for cipherEngine.js tooling, if added later)
+# Node
 node_modules/
+
+# OS cruft
+.DS_Store
