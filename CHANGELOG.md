@@ -66,6 +66,9 @@
 - Cobertura de regresión para el nuevo contexto de keystream fallback y la compatibilidad de passphrases de despliegue en los tests Python y Node.
 - La lógica de build y decrypt del bundle ahora resuelve el corpus vendored desde `private_core/tangos.json` cuando se ejecuta desde esta estructura de repo público.
 
+- Rebuilt `pwa/encrypted-bundle.json` with an updated deployment passphrase and pushed the artifact to the public repo so installed clients can unlock the latest bundle.
+- Increased base font-size for mobile readability in [pwa/index.html](pwa/index.html); bumped `CACHE_VERSION` in [pwa/service-worker.js](pwa/service-worker.js) to `tango-cifrado-v2` so clients refresh the application shell and pick up the styling change.
+
 ### Initial
 - `cipher_engine.py` con algoritmo de cifrado/descifrado por coordenadas de tango y SALT=47.
 - `main.py` con integración a la API de Telegram Bots.
