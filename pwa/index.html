@@ -73,8 +73,7 @@
     --mono: "IBM Plex Mono", ui-monospace, monospace;
   }
 
-  /* Increase base font-size for better readability on mobile devices */
-  html { font-size: 18px; }
+  /* Reverted global font-size change; apply targeted increases below */
 
   * { box-sizing: border-box; }
 
@@ -108,7 +107,7 @@
   header.app-header h1 {
     font-family: var(--display);
     font-weight: 400;
-    font-size: 2rem;
+    font-size: 2.4rem;
     letter-spacing: 0.02em;
     margin: 0 0 0.4rem;
   }
@@ -123,7 +122,7 @@
 
   header.app-header p {
     color: var(--muted);
-    font-size: 0.95rem;
+    font-size: 1.05rem;
     margin: 0;
     font-style: italic;
   }
@@ -286,6 +285,13 @@
     line-height: 1.5;
   }
 
+  /* targeted hint styling for unlock screen */
+  .unlock-hint {
+    color: var(--muted);
+    font-size: 1rem;
+    margin-top: -0.3rem;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     .card { transition: opacity 180ms ease; }
   }
@@ -302,7 +308,7 @@
   <!-- ================= FIRST RUN ================= -->
   <section id="unlock-screen" class="card" hidden>
     <label for="clave-despliegue">Clave de despliegue</label>
-    <p style="color:var(--muted); font-size:0.9rem; margin-top:-0.3rem;">
+    <p class="unlock-hint">
       Se pide una sola vez. A partir de acá, abrí y usá — sin contraseña.
     </p>
     <form id="unlock-form">

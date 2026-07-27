@@ -18,7 +18,7 @@
  * get cleaned up on activate instead of accumulating forever.
  */
 
-const CACHE_VERSION = "tango-cifrado-v2";
+const CACHE_VERSION = "tango-cifrado-v3";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const BUNDLE_CACHE = `${CACHE_VERSION}-bundle`;
 
