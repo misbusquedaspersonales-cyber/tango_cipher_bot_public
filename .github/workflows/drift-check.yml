@@ -1,0 +1,120 @@
+name: Drift check — private repo vs. vendored SHA
+
+# Runs in the PUBLIC repo. Checks once a week whether the private repo's
+# HEAD has moved past the SHA pinned in scripts/setup_private_core.sh.
+# If it has, opens a GitHub Issue automatically so the maintainer doesn't
+# have to remember to diff manually.
+#
+# Required repo secret (in THIS public repo): PRIVATE_REPO_PAT
+#   -> Personal Access Token (classic, scope `repo`) with read access to the
+#      private repo (tango_corpus_private). Fine-grained tokens work too if
+#      scoped to "Contents: read" on that repo.
+#
+# Can also be triggered manually via `workflow_dispatch` from the Actions tab
+# any time you want to check right now instead of waiting for Monday.
+
+on:
+  schedule:
+    # Weekly: Mondays at 08:00 UTC (05:00 America/Argentina/Buenos_Aires)
+    - cron: '0 8 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  issues: write   # needed to create the drift Issue
+  contents: read  # needed to checkout setup_private_core.sh
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Obtener SHA remoto del repo privado
+        id: remote-sha
+        env:
+          PAT: ${{ secrets.PRIVATE_REPO_PAT }}
+        run: |
+          if [ -z "$PAT" ]; then
+            echo "❌ ERROR: El secreto PRIVATE_REPO_PAT no está configurado en este repositorio."
+            echo "   Sin él no podemos consultar el HEAD del repo privado para detectar drift."
+            echo "   Crealo en Settings → Secrets and variables → Actions → New repository secret."
+            echo "   (ver Problema 10 en TROUBLESHOOTING.md para el paso a paso)"
+            exit 1
+          fi
+          REMOTE_SHA=$(git ls-remote "https://x-access-token:${PAT}@github.com/misbusquedaspersonales-cyber/tango_corpus_private.git" HEAD | awk '{print $1}')
+          if [ -z "$REMOTE_SHA" ]; then
+            echo "❌ ERROR: No se pudo obtener el SHA remoto. Verificá que PRIVATE_REPO_PAT tenga acceso al repo privado."
+            exit 1
+          fi
+          echo "sha=$REMOTE_SHA" >> "$GITHUB_OUTPUT"
+          echo "✅ SHA remoto (HEAD del privado): $REMOTE_SHA"
+
+      - name: Obtener SHA local pinneado en setup_private_core.sh
+        id: local-sha
+        run: |
+          LOCAL_SHA=$(grep -oP 'PRIVATE_CORE_COMMIT="\K[a-f0-9]{40}' scripts/setup_private_core.sh)
+          if [ -z "$LOCAL_SHA" ]; then
+            echo "❌ ERROR: No se encontró PRIVATE_CORE_COMMIT en scripts/setup_private_core.sh"
+            exit 1
+          fi
+          echo "sha=$LOCAL_SHA" >> "$GITHUB_OUTPUT"
+          echo "📍 SHA local (pinneado en el script): $LOCAL_SHA"
+
+      - name: Comparar — abrir Issue si hay drift
+        if: steps.remote-sha.outputs.sha != steps.local-sha.outputs.sha
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const remote = "${{ steps.remote-sha.outputs.sha }}";
+            const local = "${{ steps.local-sha.outputs.sha }}";
+            const repo = context.repo.owner + "/" + context.repo.repo;
+            const shortRemote = remote.slice(0, 8);
+            const shortLocal = local.slice(0, 8);
+
+            // Try to avoid creating duplicate open issues for the same drift.
+            // If there's already an open issue with label "drift" mentioning
+            // the same remote SHA, bail out.
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "drift"
+            });
+            const duplicate = existing.data.some(issue =>
+              issue.body && issue.body.includes(remote)
+            );
+            if (duplicate) {
+              console.log(`ℹ️ Ya existe un Issue de drift abierto para el SHA remoto ${shortRemote} — no creamos uno duplicado.`);
+              return;
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🔄 Drift detectado: private_core (${shortRemote}… vs ${shortLocal}…)`,
+              body:
+                `El repositorio privado **tango_corpus_private** avanzó respecto al SHA pinneado en \\`scripts/setup_private_core.sh\\`.\n\n` +
+                `| Origen | SHA |\n` +
+                `|---|---|\n` +
+                `| 🔺 HEAD del repo privado (remoto) | \\`${remote}\\` |\n` +
+                `| 📍 SHA pinneado en \\`setup_private_core.sh\\` | \\`${local}\\` |\n\n` +
+                `**Qué hacer:**\n` +
+                `1. Verificá los commits nuevos del privado para entender qué cambió (nuevos tangos, fixes de padding, parches en cipher_engine, etc.).\n` +
+                `2. Editá \\`scripts/setup_private_core.sh\\` y cambiá \\`PRIVATE_CORE_COMMIT\\` al SHA nuevo.\n` +
+                `3. Localmente actualizá tu entorno vendored:\n` +
+                `   \\`\\`\\`bash\n` +
+                `   rm -rf private_core\n` +
+                `   ./scripts/setup_private_core.sh\n` +
+                `   python3 -m pytest tests/ -v\n` +
+                `   npm test\n` +
+                `   \\`\\`\\`\n` +
+                `4. Commit y PR con el cambio de SHA.\n\n` +
+                `> *Issue abierto automáticamente por el workflow \\`drift-check.yml\\` en \\`${repo}\\`.*`,
+              labels: ["drift", "maintenance"]
+            });
+            console.log(`✅ Issue de drift creado para ${shortRemote} → ${shortLocal}`);
+
+      - name: Comparar — reportar OK si no hay drift
+        if: steps.remote-sha.outputs.sha == steps.local-sha.outputs.sha
+        run: echo "✅ Sin drift — ambos SHA coinciden. Nada que actualizar."

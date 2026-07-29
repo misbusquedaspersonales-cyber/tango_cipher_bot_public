@@ -2,7 +2,7 @@
   "name": "Tango Cifrado",
   "short_name": "Tango",
   "description": "Mensajería cifrada por coordenadas de tango, transportada sobre Telegram.",
-  "start_url": "./index.html",
+  "start_url": "./index.html?src=pwa-install",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",

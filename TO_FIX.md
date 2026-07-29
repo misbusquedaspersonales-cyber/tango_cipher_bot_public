@@ -10,8 +10,8 @@ Ordered by priority: P0 (critical) → P3 (low).
 | 🔴 P0 (Critical) | 2 | 2 | 0 |
 | 🟠 P1 (High) | 5 | 5 | 0 |
 | 🟡 P2 (Medium) | 5 | 5 | 0 |
-| 🟢 P3 (Low) | 6 | 5 | 1 |
-| **Total** | **18** | **17** | **1** |
+| 🟢 P3 (Low) | 6 | 6 | 0 |
+| **Total** | **18** | **18** | **0** |
 
 ---
 
@@ -296,7 +296,7 @@ There's no dependency-pinning tooling (like `pip-tools`, `npm lockfile`, `renova
   2. Compute its SHA.
   3. If `PRIVATE_CORE_COMMIT` in the script differs → open a PR or file an Issue to bump it.
 
-- **Resolved**: Added `.github/workflows/drift-check.yml` which runs weekly and uses `PRIVATE_REPO_PAT` to fetch the remote SHA via `git ls-remote` without fully cloning. If it differs from `PRIVATE_CORE_COMMIT`, it opens a GitHub issue automatically notifying the maintainer of the drift.
+- **Resolved**: Added `.github/workflows/drift-check.yml` (commit 2026-07-29) which runs weekly on Mondays (08:00 UTC) and uses `PRIVATE_REPO_PAT` to fetch the remote SHA via `git ls-remote` without fully cloning. If it differs from `PRIVATE_CORE_COMMIT`, it opens a GitHub Issue automatically notifying the maintainer of the drift. The workflow also deduplicates (won't open a second issue if an open `drift`-labeled issue already mentions the same remote SHA) and supports `workflow_dispatch` for manual re-checks from the Actions tab.
 
 ---
 
