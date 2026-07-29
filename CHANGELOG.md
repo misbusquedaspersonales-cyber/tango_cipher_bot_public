@@ -3,6 +3,8 @@
 ## [Unreleased] - 2026-07-25
 
 ### Added
+- `scripts/check_coverage.py` y `tests/test_check_coverage.py` — script de utilidad para verificar la cobertura de codificación de un texto de prueba contra el corpus de tangos (Fase 2).
+- Letras de tangos adicionales ("Volver", "Caminito") preparadas en formato JSON (`tangos_nuevos.json`) para su integración al corpus privado.
 - `tangos.json` ampliado de 2 a 7 tangos. Los versos auténticos se complementan con versos de relleno técnico (`padding: true`) para ampliar la cobertura de vocabulario moderno. Los versos de relleno no forman parte de la letra original:
   - **1** Mano a mano (ampliado con versos auténticos)
   - **2** Yira, yira (nuevo, versos auténticos)
@@ -39,6 +41,8 @@
   - `fonts/` — Gloock, Crimson Pro, IBM Plex Mono (self-hosted, funciona offline sin CDN)
 
 ### Fixed
+- **Protección at-rest incompleta para credenciales y corpus** (P3-2 y P3-3) — La bóveda sellada (Layer 2) fue implementada completamente en la interfaz. Al activar la seguridad por PIN, tanto el corpus (`tangos.json`) como las credenciales de Telegram se cifran en IndexedDB (`secure-vault.js`), asegurando protección at-rest real para dispositivos perdidos o robados.
+- **Limpieza de código muerto y artefactos temporales** — Se removieron archivos residuales, parches de merge y helpers no utilizados para dejar el repositorio sin código redundante ni archivos de respaldo innecesarios.
 - **Zero-Knowledge contradicted by public corpus** — resuelto mediante arquitectura de doble repositorio (Fase 3): `tangos.json` y `SALT` viven solo en el repo privado; GitHub Actions los cifra con AES-GCM antes de publicar al repo público. El corpus nunca queda expuesto en texto plano.
 - **`[palabra]` fallback filtraba texto plano** — reemplazado en ambos motores (Python y JS): las palabras fuera del corpus se cifran con XOR SALT en hex, marcadas con `#`. Ningún literal visible transita por Telegram.
 - **JS `\w` ASCII-only rompía palabras acentuadas** — `cipherEngine.js` reemplazó `/\w+/g` por `/\p{L}+/gu`. `mañana` ya no se parte en `['ma','ana']`.
@@ -50,6 +54,7 @@
 - **Dígitos tokenizados carácter a carácter** — ahora se agrupan en una sola corrida de dígitos y se codifican como un único token `#hex`.
 - **Fallback de un solo byte trivialmente reversible** — el fallback `#hex` ya no usa XOR directo contra el SALT (un byte, 256 posibilidades). Reemplazado por `PBKDF2-HMAC-SHA256(key=SALT, nonce=token_index)` como keystream, produciendo una clave distinta por token. El atacante necesita conocer tanto el SALT como la posición del token para intentar una clave. Python usa `hashlib.pbkdf2_hmac`; JS usa `SubtleCrypto.deriveBits`.
 - **`descifrar_mensaje` lanzaba `IndexError`/`KeyError` silenciosos** ante mensajes corruptos o truncados — reemplazado por validación defensiva explícita en ambos motores (Python y JS): formato vacío, separador faltante, clave no numérica, índices de verso/palabra fuera de rango, tokens de coordenada malformados y hex fallback inválido ahora lanzan `ValueError`/`Error` con mensaje descriptivo.
+- **Frecuencia de coordenadas predecible (book cipher first-match)** — `cipher_engine.py` y `pwa/cipherEngine.js` ahora recopilan *todas* las ocurrencias de una palabra en el tango y eligen una aleatoriamente (`secrets.choice` en Python, `crypto.getRandomValues` en JS). La misma palabra ya no produce siempre el mismo `VxxPyy`, reduciendo ataques de análisis de frecuencia. Decifrado es compatible: cualquier coordenada válida sigue mapeando a la misma palabra.
 
 ### Changed
 - `cipher_engine.py` — `salt=None` por defecto; `_resolve_salt()` lee `CIFRADO_SALT` del entorno; `iter_tangos()` itera solo entradas de tango reales saltando claves `_`; guarda de claves metadata en `cifrar/descifrar`; fallback reemplazado con PBKDF2 keystream; `descifrar_mensaje` completamente defensivo.

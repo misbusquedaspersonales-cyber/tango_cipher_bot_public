@@ -7,12 +7,12 @@
 - [x] `main.py` — CLI interactivo, delega HTTP a `telegram_client`, errores de crypto capturados
 - [x] Credenciales gestionadas via `.env` con `python-dotenv`
 - [x] `.env.example`, `.gitignore`, `TROUBLESHOOTING.md`, `CHANGELOG.md`, `README.md`, `ROADMAP.md`
-- [x] Suite de tests: 37 tests cubriendo cifrado, descifrado, round-trip, dígitos, SALT por entorno, `iter_tangos`, pipeline de bundle y errores de red
+- [x] Suite de tests: 78 tests cubriendo cifrado, descifrado, round-trip, dígitos, SALT por entorno, `iter_tangos`, pipeline de bundle, errores de red, bóveda de seguridad y cobertura.
 
 ## Fase 2: Ampliación del Corpus 🔄 En progreso
 - [x] Ampliar `tangos.json` de 2 a 7 tangos (versos auténticos + padding técnico marcado con `"padding": true`)
 - [ ] Continuar agregando tangos hasta cubrir vocabulario español común (~20+ tangos)
-- [ ] Script utilitario para verificar cobertura de palabras contra un texto de prueba
+- [x] Script utilitario para verificar cobertura de palabras contra un texto de prueba
 
 ## Fase 3: Arquitectura de Doble Repositorio ✅ Pipeline implementado
 La base de datos (`tangos.json`) y el `SALT` nunca se exponen en el repo público.
@@ -69,7 +69,7 @@ El pipeline de despliegue los cifra antes de publicar.
 
 ## Principios que guían el proyecto
 - **Zero-Trust sobre Telegram:** solo transita texto cifrado, nunca el mensaje original
-- **Zero-Knowledge:** `tangos.json` y `SALT` solo existen en el repo privado y en IndexedDB del dispositivo
+- **Zero-Knowledge en la red y en el repo público:** `tangos.json` y `SALT` solo existen en el repo privado; nunca viajan en texto plano por la red ni quedan en el repo público. A nivel de dispositivo, la seguridad del corpus y las credenciales depende de si el PIN de dispositivo está activado (Layer 2) — ver detalles en Fase 5.
 - **SALT como obfuscación, no criptografía:** offset numérico que enmascara el ID del tango. La seguridad real viene de mantener `tangos.json` privado. En producción se inyecta como secreto de GitHub Actions (`CIFRADO_SALT`). `DEFAULT_SALT = 47` es solo un placeholder de desarrollo.
 - **Cero Fricción:** `CLAVE_DESPLIEGUE` se ingresa una sola vez al instalar la PWA. A partir de allí, uso instantáneo sin contraseñas.
 - **Costo $0:** GitHub Pages + GitHub Actions + Telegram Bot API, todo gratuito

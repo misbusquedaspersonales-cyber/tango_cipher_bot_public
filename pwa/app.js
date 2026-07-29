@@ -12,22 +12,45 @@
  *   Every other day: loadPayloadDirect() -> straight to the composer,
  *               no password.
  *
- * DESIGN CHOICE (frictionless, matches secure-vault.js's own docs): the
+ * DEFAULT MODE (frictionless, matches secure-vault.js's own docs): the
  * unlocked payload sits in IndexedDB as plain JSON on this device. That is
- * a conscious trade-off in favor of zero daily friction, not an oversight —
- * see the comments at the top of secure-vault.js if you want the PIN-gated
- * alternative (sealForDevice/openDeviceVault) instead.
+ * a conscious trade-off in favor of zero daily friction, not an oversight.
+ *
+ * OPT-IN PIN MODE: Settings > "Seguridad del dispositivo" lets the user
+ * switch to the PIN-gated device vault (sealForDevice/openDeviceVault from
+ * secure-vault.js) instead. In that mode the app asks for a PIN on every
+ * open (handlePinUnlockSubmit) rather than loading straight into the
+ * composer. Which mode is active is tracked in
+ * localStorage[VAULT_MODE_KEY] and mirrored in the module-level `vaultMode`
+ * variable below.
  *
  * Telegram bot token + chat id are separate from the tango corpus: they're
- * this user's own delivery-channel credentials, not the cipher secret, so
- * they're kept in localStorage rather than the encrypted vault. Losing them
- * only means re-typing a bot token, not re-deriving the cipher.
+ * this user's own delivery-channel credentials, not the cipher secret.
+ *   - Frictionless mode: kept in localStorage, same as before. Losing them
+ *     only means re-typing a bot token, not re-deriving the cipher.
+ *   - PIN mode: kept *inside* the sealed vault payload alongside the corpus
+ *     (see TO_FIX.md P3-3) — on a lost/stolen device in PIN mode, an
+ *     attacker who can't open the vault also can't send Telegram messages
+ *     impersonating the user.
  */
 
 import { cifrarMensaje, descifrarMensaje } from "./cipherEngine.js";
-import { unlockDeployBundle, savePayloadDirect, loadPayloadDirect, hasPayloadDirect } from "./secure-vault.js";
+import {
+    unlockDeployBundle,
+    savePayloadDirect,
+    loadPayloadDirect,
+    hasPayloadDirect,
+    deletePayloadDirect,
+    sealForDevice,
+    openDeviceVault,
+    saveSealedVault,
+    loadSealedVault,
+    hasSealedVault,
+    deleteSealedVault,
+} from "./secure-vault.js";
 
 const TELEGRAM_CONFIG_KEY = "tango-cifrado:telegram-config";
+const VAULT_MODE_KEY = "tango-cifrado:vault-mode"; // 'direct' | 'pin'
 const BUNDLE_URL = "./encrypted-bundle.json";
 // Telegram's sendMessage caps text at 4096 UTF-8 characters -- checked
 // upfront so a long message fails with a clear reason instead of a bare
@@ -36,9 +59,14 @@ const TELEGRAM_MAX_LEN = 4096;
 
 // ---------- state ----------
 
-let payload = null; // { tangos, salt }
+let payload = null; // { tangos, salt } in direct mode; { tangos, salt, telegram } in pin mode
 let mode = "cifrar"; // 'cifrar' | 'descifrar'
 let bundleGeneratedAt = null; // ISO string from the fetched bundle's plaintext metadata, or null
+let vaultMode = "direct"; // 'direct' | 'pin' -- resolved from localStorage at boot
+let sessionPin = null; // the PIN used to open the device vault this session, kept in
+// memory only (never persisted) so Settings can re-seal the vault after an
+// edit (e.g. saving new Telegram credentials) without prompting for the PIN
+// again on every save. Cleared on "Desactivar PIN" and on page reload.
 
 // ---------- small DOM helpers ----------
 
@@ -46,6 +74,7 @@ const $ = (sel) => document.querySelector(sel);
 
 function showScreen(name) {
     $("#unlock-screen").hidden = name !== "unlock";
+    $("#pin-unlock-screen").hidden = name !== "pin-unlock";
     $("#app-screen").hidden = name !== "app";
 }
 
@@ -62,9 +91,9 @@ function iterTangos(tangos) {
     );
 }
 
-// ---------- Telegram config (separate from the cipher vault) ----------
+// ---------- Telegram config (storage location depends on vaultMode) ----------
 
-function loadTelegramConfig() {
+function loadTelegramConfigFromLocalStorage() {
     try {
         const raw = localStorage.getItem(TELEGRAM_CONFIG_KEY);
         return raw ? JSON.parse(raw) : { botToken: "", chatId: "" };
@@ -73,8 +102,41 @@ function loadTelegramConfig() {
     }
 }
 
-function saveTelegramConfig(config) {
+function saveTelegramConfigToLocalStorage(config) {
     localStorage.setItem(TELEGRAM_CONFIG_KEY, JSON.stringify(config));
+}
+
+/**
+ * Reads the current Telegram config from wherever this vaultMode keeps it:
+ * localStorage in direct mode, or the (already-unlocked, in-memory) sealed
+ * payload in pin mode. Always returns synchronously -- pin mode never hits
+ * IndexedDB here because the vault is already open in `payload` by the time
+ * any screen that needs this has been reached.
+ */
+function getTelegramConfig() {
+    if (vaultMode === "pin") {
+        return (payload && payload.telegram) || { botToken: "", chatId: "" };
+    }
+    return loadTelegramConfigFromLocalStorage();
+}
+
+/**
+ * Persists a new Telegram config to wherever this vaultMode keeps it. In pin
+ * mode this re-seals the whole vault under `sessionPin` -- there's no way to
+ * update just the Telegram fields inside an AES-GCM ciphertext without
+ * re-encrypting the payload it's part of.
+ */
+async function setTelegramConfig(config) {
+    if (vaultMode === "pin") {
+        if (!sessionPin || !payload) {
+            throw new Error("La bóveda no está abierta -- no se puede guardar.");
+        }
+        payload.telegram = config;
+        const sealed = await sealForDevice(sessionPin, payload);
+        await saveSealedVault(sealed);
+    } else {
+        saveTelegramConfigToLocalStorage(config);
+    }
 }
 
 async function enviarATelegram(mensajeCifrado, botToken, chatId) {
@@ -102,6 +164,17 @@ async function enviarATelegram(mensajeCifrado, botToken, chatId) {
         }
         throw new Error(detalle ? `Telegram: ${detalle}` : `Telegram respondió con error ${resp.status}`);
     }
+}
+
+// ---------- vault mode (direct vs PIN-gated) ----------
+
+function getVaultMode() {
+    return localStorage.getItem(VAULT_MODE_KEY) === "pin" ? "pin" : "direct";
+}
+
+function setVaultMode(newMode) {
+    localStorage.setItem(VAULT_MODE_KEY, newMode);
+    vaultMode = newMode;
 }
 
 // ---------- first-run unlock ----------
@@ -137,6 +210,7 @@ async function handleUnlockSubmit(event) {
             showBundleGeneratedAt(bundle.generated_at);
         }
 
+        setVaultMode("direct");
         await savePayloadDirect(payload);
         claveInput.value = "";
 
@@ -144,6 +218,46 @@ async function handleUnlockSubmit(event) {
         enterComposer();
     } catch (err) {
         setStatus(statusEl, err.message || "No se pudo desbloquear el paquete.", "error");
+    } finally {
+        button.disabled = false;
+    }
+}
+
+// ---------- PIN unlock (device vault, opt-in) ----------
+
+async function handlePinUnlockSubmit(event) {
+    event.preventDefault();
+    const pinInput = $("#device-pin");
+    const statusEl = $("#pin-unlock-status");
+    const button = $("#pin-unlock-submit");
+
+    const pin = pinInput.value;
+    if (!pin) {
+        setStatus(statusEl, "Ingresá tu PIN.", "error");
+        return;
+    }
+
+    button.disabled = true;
+    setStatus(statusEl, "Verificando…", "info");
+
+    try {
+        const sealed = await loadSealedVault();
+        if (!sealed) {
+            // Shouldn't normally happen (init() only shows this screen when
+            // hasSealedVault() was true), but IndexedDB can be cleared out
+            // from under the app -- fail with a clear message instead of a
+            // confusing decrypt error.
+            throw new Error("No se encontró la bóveda protegida en este dispositivo.");
+        }
+        const opened = await openDeviceVault(pin, sealed);
+        payload = opened; // { tangos, salt, telegram }
+        sessionPin = pin;
+        pinInput.value = "";
+
+        setStatus(statusEl, "", "info");
+        enterComposer();
+    } catch (err) {
+        setStatus(statusEl, err.message || "PIN incorrecto.", "error");
     } finally {
         button.disabled = false;
     }
@@ -238,7 +352,7 @@ async function handleCopy() {
 
 async function handleSend() {
     const statusEl = $("#composer-status");
-    const { botToken, chatId } = loadTelegramConfig();
+    const { botToken, chatId } = getTelegramConfig();
 
     if (!botToken || !chatId) {
         setStatus(statusEl, "Configurá tu bot de Telegram en Ajustes antes de enviar.", "error");
@@ -295,11 +409,18 @@ async function refreshBundleGeneratedAt() {
     }
 }
 
-function initSettings() {
-    const { botToken, chatId } = loadTelegramConfig();
+// Reads the Telegram fields into the form. Split out from initSettings()
+// because at boot time (initSettings runs once, before any vault is open)
+// there's nothing to show yet in pin mode -- payload doesn't exist until
+// handlePinUnlockSubmit or handleUnlockSubmit succeeds. Called again from
+// enterComposer() once a payload is actually available.
+function populateTelegramFields() {
+    const { botToken, chatId } = getTelegramConfig();
     $("#bot-token").value = botToken;
     $("#chat-id").value = chatId;
+}
 
+function initSettings() {
     // Show whatever was last known immediately (no network wait); the
     // background refreshBundleGeneratedAt() call from init() will update
     // this in place if a fetch succeeds and finds a newer bundle.
@@ -309,42 +430,175 @@ function initSettings() {
         $("#settings-panel").hidden = !$("#settings-panel").hidden;
     });
 
-    $("#settings-form").addEventListener("submit", (event) => {
+    $("#settings-form").addEventListener("submit", async (event) => {
         event.preventDefault();
-        saveTelegramConfig({
-            botToken: $("#bot-token").value.trim(),
-            chatId: $("#chat-id").value.trim(),
-        });
-        setStatus($("#settings-status"), "Guardado.", "success");
+        const statusEl = $("#settings-status");
+        try {
+            await setTelegramConfig({
+                botToken: $("#bot-token").value.trim(),
+                chatId: $("#chat-id").value.trim(),
+            });
+            setStatus(statusEl, "Guardado.", "success");
+        } catch (err) {
+            setStatus(statusEl, err.message || "No se pudo guardar.", "error");
+        }
     });
+}
+
+// ---------- security settings (direct <-> PIN-gated vault toggle) ----------
+
+function updateSecurityPanel() {
+    const modeStatus = $("#security-mode-status");
+    const enableForm = $("#enable-pin-form");
+    const disableButton = $("#disable-pin-button");
+
+    if (vaultMode === "pin") {
+        setStatus(modeStatus, "Este dispositivo está protegido con PIN.", "success");
+        enableForm.hidden = true;
+        disableButton.hidden = false;
+    } else {
+        setStatus(
+            modeStatus,
+            "Sin PIN: cualquiera con acceso al dispositivo puede leer el corpus y las credenciales de Telegram.",
+            "info"
+        );
+        enableForm.hidden = false;
+        disableButton.hidden = true;
+    }
+}
+
+function initSecuritySettings() {
+    $("#security-toggle").addEventListener("click", () => {
+        $("#security-panel").hidden = !$("#security-panel").hidden;
+        if (!$("#security-panel").hidden) updateSecurityPanel();
+    });
+
+    $("#enable-pin-form").addEventListener("submit", handleEnablePin);
+    $("#disable-pin-button").addEventListener("click", handleDisablePin);
+}
+
+async function handleEnablePin(event) {
+    event.preventDefault();
+    const statusEl = $("#security-status");
+    const newPinInput = $("#new-pin");
+    const confirmPinInput = $("#confirm-pin");
+    const newPin = newPinInput.value;
+    const confirmPin = confirmPinInput.value;
+
+    if (!newPin || newPin.length < 4) {
+        setStatus(statusEl, "El PIN debe tener al menos 4 dígitos.", "error");
+        return;
+    }
+    if (newPin !== confirmPin) {
+        setStatus(statusEl, "Los PIN no coinciden.", "error");
+        return;
+    }
+    if (!payload) {
+        setStatus(statusEl, "Todavía no hay un corpus cargado.", "error");
+        return;
+    }
+
+    setStatus(statusEl, "Activando PIN…", "info");
+    try {
+        // Fold today's Telegram config (still in localStorage, since we're
+        // coming from direct mode) into the payload that gets sealed, per
+        // TO_FIX.md P3-3 -- from here on it lives inside the vault instead.
+        const currentTelegram = loadTelegramConfigFromLocalStorage();
+        const toSeal = { tangos: payload.tangos, salt: payload.salt, telegram: currentTelegram };
+
+        const sealed = await sealForDevice(newPin, toSeal);
+        await saveSealedVault(sealed);
+        await deletePayloadDirect();
+        localStorage.removeItem(TELEGRAM_CONFIG_KEY);
+
+        payload = toSeal;
+        sessionPin = newPin;
+        setVaultMode("pin");
+
+        newPinInput.value = "";
+        confirmPinInput.value = "";
+        populateTelegramFields();
+        setStatus(statusEl, "PIN activado. La próxima vez que abras la app, te lo va a pedir.", "success");
+        updateSecurityPanel();
+    } catch (err) {
+        setStatus(statusEl, err.message || "No se pudo activar el PIN.", "error");
+    }
+}
+
+async function handleDisablePin() {
+    const statusEl = $("#security-status");
+    if (!sessionPin) {
+        // Shouldn't be reachable in practice -- this button is only visible
+        // after a successful PIN unlock in this same session -- but guard
+        // against it anyway rather than silently failing sealForDevice below.
+        setStatus(statusEl, "No se puede desactivar el PIN sin haberlo desbloqueado en esta sesión.", "error");
+        return;
+    }
+    if (!confirm("¿Desactivar el PIN? El corpus y las credenciales de Telegram van a quedar sin cifrar en este dispositivo.")) {
+        return;
+    }
+
+    setStatus(statusEl, "Desactivando…", "info");
+    try {
+        const sealed = await loadSealedVault();
+        const opened = await openDeviceVault(sessionPin, sealed);
+        const telegram = opened.telegram || { botToken: "", chatId: "" };
+
+        await savePayloadDirect({ tangos: opened.tangos, salt: opened.salt });
+        saveTelegramConfigToLocalStorage(telegram);
+        await deleteSealedVault();
+
+        payload = { tangos: opened.tangos, salt: opened.salt };
+        sessionPin = null;
+        setVaultMode("direct");
+
+        populateTelegramFields();
+        setStatus(statusEl, "PIN desactivado.", "success");
+        updateSecurityPanel();
+    } catch (err) {
+        setStatus(statusEl, err.message || "No se pudo desactivar el PIN.", "error");
+    }
 }
 
 // ---------- boot ----------
 
 function enterComposer() {
     populateTangoSelect();
+    populateTelegramFields();
     setMode("cifrar");
     showScreen("app");
 }
 
 async function init() {
     $("#unlock-form").addEventListener("submit", handleUnlockSubmit);
+    $("#pin-unlock-form").addEventListener("submit", handlePinUnlockSubmit);
     $("#mode-cifrar").addEventListener("click", () => setMode("cifrar"));
     $("#mode-descifrar").addEventListener("click", () => setMode("descifrar"));
     $("#run-action").addEventListener("click", handleRunAction);
     $("#copy-button").addEventListener("click", handleCopy);
     $("#send-button").addEventListener("click", handleSend);
     initSettings();
+    initSecuritySettings();
 
     // Fire-and-forget: checks whether a newer bundle exists on the server,
     // on both the first-run and frictionless paths alike. Never awaited --
-    // this must not delay showing the unlock screen or composer.
+    // this must not delay showing any of the three screens below.
     refreshBundleGeneratedAt();
 
-    if (await hasPayloadDirect()) {
+    vaultMode = getVaultMode();
+
+    if (vaultMode === "pin" && (await hasSealedVault())) {
+        showScreen("pin-unlock");
+    } else if (await hasPayloadDirect()) {
         payload = await loadPayloadDirect();
         enterComposer();
     } else {
+        // Covers true first run, and the edge case where localStorage says
+        // 'pin' but the sealed IndexedDB record is missing (e.g. the user
+        // cleared site data by hand) -- fall back to asking for
+        // CLAVE_DESPLIEGUE again instead of showing a PIN prompt that can
+        // never succeed.
+        setVaultMode("direct");
         showScreen("unlock");
     }
 

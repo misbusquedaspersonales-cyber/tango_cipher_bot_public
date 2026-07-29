@@ -5,7 +5,7 @@ Esta especificación describe la arquitectura e implementación de una aplicaci�
 
 ### Principios Fundamentales
 * **Zero-Trust sobre el Canal de Transporte:** Telegram funciona estrictamente como una tubería ciega. Solo transita texto cifrado mediante coordenadas numéricas (`50-V09P01-~20-V09P02...`).
-* **Zero-Knowledge Absoluto (Resguardo de Secretos):** La base de datos de tangos (`tangos.json`) y el valor de `SALT` permanecen resguardados exclusivamente en un **repositorio privado de GitHub**.
+* **Zero-Knowledge en la red y en el repo público:** La base de datos de tangos (`tangos.json`) y el valor de `SALT` permanecen resguardados exclusivamente en un **repositorio privado de GitHub**; el repo público y el canal de Telegram nunca ven esos datos en texto plano. **A nivel del dispositivo esto depende del modo elegido**: en el modo sin fricción (por defecto), el corpus descifrado queda en IndexedDB en texto plano — cualquiera con acceso al almacenamiento del dispositivo puede leerlo. Activando el PIN de dispositivo (Ajustes > "Seguridad del dispositivo") ese corpus, junto con las credenciales de Telegram, queda cifrado en reposo bajo AES-256-GCM derivado del PIN. Ver `TO_FIX.md` P3-2/P3-3.
 * **Infraestructura 100% Gratuita (Solo GitHub + Telegram):** Sin servicios de terceros (no Vercel, no Cloudflare). La PWA se sirve desde GitHub Pages mediante un pipeline automatizado de **GitHub Actions**.
 * **Cero Fricción para el Usuario:** Tu cliente ingresa la Clave de Despliegue por única vez al instalar la PWA en su celular. A partir de allí, el acceso es instantáneo (abrir, redactar y enviar).
 

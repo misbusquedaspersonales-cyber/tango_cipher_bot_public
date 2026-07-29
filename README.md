@@ -29,7 +29,7 @@ El corpus y el SALT nunca viajan en texto plano: GitHub Actions los cifra con AE
 | `scripts/decrypt_bundle_cli.py` | Smoke-test CLI para verificar el bundle antes de publicarlo. |
 | `scripts/setup_private_core.sh` | Configura el entorno local clonando el repo privado en un estado "vendored" (pinneado a un commit SHA). |
 | `.github/workflows/build-encrypted-bundle.yml` | GitHub Actions workflow de build. |
-| `tests/` | 64 tests: 45 Python + 19 JS, cubriendo cifrado, round-trip, pipeline de bundle, errores de red. |
+| `tests/` | 78 tests: 54 Python + 24 JS, cubriendo cifrado, round-trip, pipeline de bundle, errores de red, seguridad y cobertura. |
 
 ## Setup del CLI (desarrollo / pruebas)
 
@@ -76,8 +76,36 @@ El script solicita la clave del tango (número del 1 al 7) y el mensaje. Cifra, 
 python3 -m pytest tests/ -v
 ```
 
+### Verificar integridad de assets de la PWA
+
+`scripts/check_pwa_assets.py` valida en dos direcciones cualquier cambio en `pwa/`:
+
+1. **FORWARD** — toda referencia en `manifest.json` (íconos), `index.html` (`@font-face`, `<link>`, `<img src>`) y `service-worker.js` (`SHELL_FILES`) apunta a un archivo que realmente existe en disco.
+2. **REVERSE** — todo `.ttf`/`.png` dentro de `pwa/fonts/` y `pwa/icons/` está referenciado por al menos uno de esos tres archivos (evita publicar fonts/icons muertos que nadie usa pero se siguen subiendo a GitHub Pages).
+
+Correrlo antes de cualquier PR que toque `pwa/`:
+
+```bash
+python3 scripts/check_pwa_assets.py
+```
+
+### Probar la PWA instalada en un celular real
+
+Ver `MOBILE_TESTING.md` (USB port-forwarding con `chrome://inspect`, camino de producción por HTTPS, y checklist: standalone, íconos sin fallback, offline, desbloqueo del bundle).
+
 ## Seguridad — notas importantes
 
 - `DEFAULT_SALT = 47` en `cipher_engine.py` es un placeholder de desarrollo. En producción el SALT se inyecta como secreto de GitHub Actions (`CIFRADO_SALT`) y nunca aparece en el código público.
 - La seguridad del sistema depende de mantener `tangos.json` y el SALT fuera del repo público. El pipeline de CI se encarga de esto.
 - Ver `ROADMAP.md` para el estado de cada fase del proyecto.
+
+## Secretos de GitHub Actions (CI/CD)
+
+Para que el pipeline de despliegue funcione correctamente, el repositorio debe tener configurados los siguientes secretos:
+
+| Secreto | Descripción |
+|---|---|
+| `CIFRADO_SALT` | Valor numérico secreto usado para enmascarar los IDs de tango. |
+| `CLAVE_DESPLIEGUE` | Contraseña maestra para descifrar el corpus en la PWA (Layer 1). |
+| `ACTIONS_DEPLOY_KEY` | (Opcional) Token para pushear al repo público de GitHub Pages. |
+| `PRIVATE_REPO_PAT` | (Opcional) Personal Access Token para que el workflow de drift-check pueda leer el repo privado. |

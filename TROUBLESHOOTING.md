@@ -61,7 +61,7 @@ El token es incorrecto o fue revocado. Ve a `@BotFather`, usa `/mybots` → sele
 
 ## Problema 4: El script crashea con "ID de tango no encontrado"
 
-El número que ingresaste en el prompt no existe en `tangos.json`. Los IDs válidos actualmente son `1` al `7`. El script muestra un mensaje de error claro y termina sin traceback.
+El número que ingresaste en el prompt no existe en tu `tangos.json`. Los IDs válidos dependen de cuántos tangos hayas agregado a tu corpus privado. El script muestra un mensaje de error claro y termina de forma limpia.
 
 ---
 
@@ -111,3 +111,30 @@ El despliegue en GitHub Pages puede tardar un par de minutos después de realiza
 3. Verifica que diga "Your site is live at...".
 4. Asegúrate de navegar a `/pwa/index.html` si los archivos de la app se encuentran en la carpeta `pwa/` (ejemplo: `https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html`).
 5. Si ves una versión vieja, fuerza la actualización en tu móvil (limpiar caché o arrastrar hacia abajo para refrescar en Safari/Chrome).
+
+---
+
+## Problema 9: El repo privado y el repo público no están sincronizados (Drift)
+
+Este proyecto usa un modelo de dos repos para separar lo sensible de lo público:
+- El repo privado contiene el core sensible (`tangos.json`, el SALT y la lógica privada de compilación).
+- El repo público contiene la PWA y el bundle cifrado que se despliega en GitHub Pages.
+
+Si el repositorio privado avanza con nuevos tangos o correcciones y este repositorio público no se actualiza (lo que se conoce como *drift*), el sistema cuenta con una verificación automática. El workflow `drift-check.yml` se ejecuta semanalmente y te alertará automáticamente abriendo un **GitHub Issue** si detecta que el `PRIVATE_CORE_COMMIT` ha quedado viejo.
+
+Cuando recibas la alerta de drift, deberás buscar el nuevo SHA en el repositorio privado, actualizar la variable `PRIVATE_CORE_COMMIT` en `scripts/setup_private_core.sh`, y correr el script localmente para sincronizar tu entorno.
+
+---
+
+## Problema 10: El workflow `drift-check.yml` falla por error de autenticación
+
+El workflow de GitHub Actions diseñado para detectar si el repositorio privado avanzó (drift-check) requiere acceso de lectura al repositorio privado, el cual no está permitido de forma predeterminada.
+
+**Síntoma:** El Action en la pestaña *Actions* falla con un error como `No se pudo obtener el SHA del repositorio privado. Verifica PRIVATE_REPO_PAT.` o un mensaje de error de autenticación de `git ls-remote`.
+
+**Solución:**
+1. Ve a tu cuenta de GitHub -> **Settings** -> **Developer settings** -> **Personal access tokens** (Tokens classic o Fine-grained).
+2. Genera un nuevo token con permisos de lectura para el repositorio privado (scope `repo`).
+3. Copia el token generado.
+4. Ve a la pestaña **Settings** de **este repositorio público**, entra a **Secrets and variables** -> **Actions** -> **New repository secret**.
+5. Crea un secreto llamado `PRIVATE_REPO_PAT` y pega allí tu token.

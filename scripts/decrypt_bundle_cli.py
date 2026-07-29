@@ -65,7 +65,8 @@ def main():
         bundle = json.load(f)
 
     resultado = descifrar_bundle(bundle, clave_despliegue)
-    print(f"OK -- {len(resultado['tangos'])} tangos, salt={resultado['salt']}")
+    tangos_reales = sum(1 for k in resultado["tangos"] if not k.startswith("_"))
+    print(f"OK -- {tangos_reales} tangos, salt={resultado['salt']}")
 
 
 if __name__ == "__main__":

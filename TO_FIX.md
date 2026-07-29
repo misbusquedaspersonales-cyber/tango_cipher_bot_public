@@ -10,8 +10,8 @@ Ordered by priority: P0 (critical) → P3 (low).
 | 🔴 P0 (Critical) | 2 | 2 | 0 |
 | 🟠 P1 (High) | 5 | 5 | 0 |
 | 🟡 P2 (Medium) | 5 | 5 | 0 |
-| 🟢 P3 (Low) | 6 | 2 | 4 |
-| **Total** | **18** | **14** | **4** |
+| 🟢 P3 (Low) | 6 | 5 | 1 |
+| **Total** | **18** | **17** | **1** |
 
 ---
 
@@ -251,34 +251,32 @@ Ordered by priority: P0 (critical) → P3 (low).
 
 | Source | Claimed | Actual |
 |---|---|---|
-| README.md:32 | "37 tests" | **64** (45 Python + 19 JS; current runnable test count)
-| CHANGELOG.md:29 | "44 Python + 15 JS = 59 tests" | **64** (45 Python + 19 JS)
+| README.md:32 | "37 tests" | **78** (54 Python + 24 JS; current runnable test count)
+| CHANGELOG.md:29 | "44 Python + 15 JS = 59 tests" | **78** (54 Python + 24 JS)
 
 The documentation now reflects the current runnable test suite.
 
 ---
 
-### [ ] P3-2: PIN-Gated Layer-2 Vault Implemented but Never Wired In
+### [x] P3-2: PIN-Gated Layer-2 Vault Implemented but Never Wired In
 
 - **Files**:
   - `pwa/secure-vault.js:131-186` — `sealForDevice(pin, payload)` + `openDeviceVault(pin, sealed)` exist and look correct (random pin_salt, random nonce, AAD-bound AES-GCM, 600k PBKDF2 iterations).
   - `pwa/app.js:28,112,275` — exclusively uses `savePayloadDirect` / `loadPayloadDirect` which writes plain JSON to IndexedDB.
 - **Problem**: The project has two security postures — one implemented, one only available by rewriting `app.js` imports. The installed PWA literally says "Sin contraseña" on the unlock hint. This is a **conscious trade-off** per the long comments in `secure-vault.js:19-34,229-241`, and that's fine. But the docs' "Zero-Knowledge" / "cero-conocimiento" claim (ROADMAP.md, `PASOS_PROYECTO_CIFRADO_TANGOS.md:9-10`) is **false for a stolen device**. Anyone with filesystem/IndexedDB read access (dev tools, rooted Android, iTunes backup of iOS, browser profile copy) gets the full corpus + SALT in plaintext.
-- **Fix**: Either:
-  - Remove or qualify the "cero-conocimiento / zero-knowledge" claim with "Zero-knowledge on the network; at-rest on device depends on PIN option."
-  - OR add a settings toggle in the UI that lets users switch between frictionless and PIN-gated storage, making the Layer 2 path actually reachable.
+- **Resolved**: Added a "Seguridad del dispositivo" toggle in Settings (`pwa/index.html` `#security-panel`, `pwa/app.js` `handleEnablePin`/`handleDisablePin`). Frictionless mode (`savePayloadDirect`/`loadPayloadDirect`) is still the default; switching to PIN mode re-seals the current payload under a user-chosen PIN (`sealForDevice`), deletes the plaintext IndexedDB copy (`deletePayloadDirect`), and from then on the app shows a PIN-unlock screen at boot (`handlePinUnlockSubmit`) instead of loading straight into the composer. Switching back does the reverse. Which mode is active is tracked in `localStorage["tango-cifrado:vault-mode"]`. The "cero-conocimiento" claim in `ROADMAP.md` and `PASOS_PROYECTO_CIFRADO_TANGOS.md` was qualified accordingly (see P3-3 note below — same docs, same edit).
 
 ---
 
-### [ ] P3-3: Telegram Credentials Stored Separately in Plain `localStorage`
+### [x] P3-3: Telegram Credentials Stored Separately in Plain `localStorage`
 
 - **File**: `pwa/app.js:62-73`
 - **Problem**: `botToken` + `chatId` are stored via `localStorage.setItem(...)` as plain JSON, separate from the tango vault. In a stolen-device scenario where IndexedDB leaks the corpus + SALT (P3-2), the attacker ALSO gets the Telegram bot credentials — they can not only decrypt all historic messages but also SEND messages impersonating the victim.
-- **Fix**: If/when the PIN-gated vault (P3-2) is wired up, store the Telegram config *inside* the sealed vault payload (or encrypt it under the same PIN-derived key) instead of `localStorage`.
+- **Resolved**: In PIN mode, Telegram credentials now live *inside* the sealed vault payload (`payload.telegram`), re-encrypted along with the corpus whenever they change (`setTelegramConfig` re-calls `sealForDevice` under the in-memory `sessionPin`). Frictionless mode is unchanged — `botToken`/`chatId` stay in `localStorage`, which remains an accepted trade-off for users who opt out of the PIN. `ROADMAP.md` and `PASOS_PROYECTO_CIFRADO_TANGOS.md` now describe zero-knowledge as covering the network transport and the public repo always; at-rest protection on the device depends on whether PIN mode is enabled.
 
 ---
 
-### [ ] P3-4: Private Repo SHA Pin — No Auto-Update / Audit Path
+### [x] P3-4: Private Repo SHA Pin — No Auto-Update / Audit Path
 
 - **File**: `scripts/setup_private_core.sh:26-27`
   ```bash
@@ -298,18 +296,25 @@ There's no dependency-pinning tooling (like `pip-tools`, `npm lockfile`, `renova
   2. Compute its SHA.
   3. If `PRIVATE_CORE_COMMIT` in the script differs → open a PR or file an Issue to bump it.
 
+- **Resolved**: Added `.github/workflows/drift-check.yml` which runs weekly and uses `PRIVATE_REPO_PAT` to fetch the remote SHA via `git ls-remote` without fully cloning. If it differs from `PRIVATE_CORE_COMMIT`, it opens a GitHub issue automatically notifying the maintainer of the drift.
+
 ---
 
 ### [ ] P3-5: Frequency Analysis on Reused Coordinates (Book Cipher Nature)
 
-- **N/A — architectural limitation**.
-- **Explanation**: Because it's a book cipher with a small current corpus (7 tangos, ROADMAP Fase 2 target: 20+), the same word in the same tango always maps to the same `VxxPyy`. Reusing the same tango key for many messages leaks:
+- **PARTIALLY RESOLVED — code mitigations done; corpus expansion (Fase 2) remains**.
+- **Architectural limitation**: Because it's a book cipher, reusing the same tango key for many messages leaks:
   - Per-message word frequency patterns (cryptanalytic frequency analysis)
   - Repeated phrases across messages
   - Exact message length in tokens
-- **Mitigation roadmap**:
-  1. Fase 2 — reach 20+ tangos so the tango ID alone isn't a strong predictor of topic/register.
-  2. Optional enhancement: when a word appears in *multiple verses of the same tango*, pick the verse/pair **randomly instead of first match**. `cipherEngine.js:117-128` currently stops on the first occurrence (`if (encontrada) return;` in inner loops). Alternatives multiply the ciphertext space and reduce repeatable coordinates. This change is **backward compatible for decryption** (any valid V/P still maps to the same word when decrypting — decryption doesn't care if the encryptor had multiple choices).
+- **Mitigations already implemented (code)**:
+  1. ✅ Random verse selection — when a word appears in *multiple verses of the same tango*, the encryptor picks a random verse/pair instead of the first match.
+     - Python: `private_core/cipher_engine.py:191-201` — `secrets.choice(matches)`
+     - JavaScript: `pwa/cipherEngine.js:117-135` — `crypto.getRandomValues()` random index
+     - This is **backward compatible for decryption** (any valid V/P still maps to the same word when decrypting — decryption doesn't care if the encryptor had multiple choices).
+  2. ✅ Context-bound fallback keystream prevents two-time-pad reuse across messages (P1-4 fix).
+- **Remaining non-code mitigation**:
+  1. Fase 2 — reach 20+ tangos so the tango ID alone isn't a strong predictor of topic/register. Currently at 7 tangos.
 
 ---
 
@@ -337,10 +342,10 @@ There's no dependency-pinning tooling (like `pip-tools`, `npm lockfile`, `renova
 | ✅ | P2-4 | `.github/workflows/build-encrypted-bundle.yml`, `scripts/build_encrypted_bundle.py` |
 | ✅ | P2-5 | `pwa/service-worker.js` |
 | ✅ | P3-1 | `README.md`, `CHANGELOG.md` |
-| ⬜ | P3-2 | `README.md`, `PASOS_PROYECTO_CIFRADO_TANGOS.md` (qualify claims) |
-| ⬜ | P3-3 | `pwa/app.js` (if Layer-2 PIN path is wired) |
-| ⬜ | P3-4 | `.github/workflows/` (new scheduled job), `scripts/setup_private_core.sh` |
-| ⬜ | P3-5 | `pwa/cipherEngine.js` + `private_core/cipher_engine.py` (private) — pick random verse match |
+| ✅ | P3-2 | `pwa/app.js`, `pwa/index.html`, `pwa/secure-vault.js`, `ROADMAP.md`, `PASOS_PROYECTO_CIFRADO_TANGOS.md` |
+| ✅ | P3-3 | `pwa/app.js`, `pwa/secure-vault.js` |
+| ✅ | P3-4 | `.github/workflows/` (new scheduled job), `scripts/setup_private_core.sh` |
+| 🔄 | P3-5 | Corpus only (Fase 2) — random verse match already done in `pwa/cipherEngine.js:117-135` + `private_core/cipher_engine.py:191-201` |
 | ✅ | P3-6 | No action |
 
 ---

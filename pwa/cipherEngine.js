@@ -113,25 +113,27 @@ export async function cifrarMensaje(idTango, mensaje, baseTangos, salt) {
 
         const flag = caseFlag(value);
         const palabraLower = value.toLowerCase();
-        let encontrada = false;
 
-        // Verso can be a plain array or {padding: true, palabras: [...]}
+        // Collect ALL matching coordinates, then pick one at random.
+        // Breaks frequency analysis: same word no longer always → same VxxPyy.
         const getPalabras = (verso) => Array.isArray(verso) ? verso : verso.palabras;
+        const matches = [];
 
         tango.versos.forEach((verso, iV) => {
-            if (encontrada) return;
             getPalabras(verso).forEach((pTango, iP) => {
-                if (encontrada) return;
                 if (pTango.toLowerCase() === palabraLower) {
                     const vPad = String(iV + 1).padStart(2, '0');
                     const pPad = String(iP + 1).padStart(2, '0');
-                    tokens.push(`V${vPad}P${pPad}${flag}`);
-                    encontrada = true;
+                    matches.push(`V${vPad}P${pPad}${flag}`);
                 }
             });
         });
 
-        if (!encontrada) {
+        if (matches.length > 0) {
+            // crypto.getRandomValues for a secure random index
+            const idx = crypto.getRandomValues(new Uint32Array(1))[0] % matches.length;
+            tokens.push(matches[idx]);
+        } else {
             const hexCifrado = await xorFallback(palabraLower, saltNum, tokens.length, `${idStr}:${tokens.join('-')}`);
             tokens.push(`#${hexCifrado}${flag}`);
         }
