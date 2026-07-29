@@ -8,6 +8,72 @@ El corpus y el SALT nunca viajan en texto plano: GitHub Actions los cifra con AE
 
 **PWA en Vivo:** [tango_cipher_bot_public/pwa](https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html)
 
+### URLs cortas y atajos de acceso
+
+La PWA se publica en GitHub Pages en una ruta un poco larga. Para no tener que escribirla
+completa cada vez, hay varias alternativas:
+
+#### 🔗 URLs cortas (funcionan una vez que se deployaron los redirects del root)
+
+En la raíz del repo hay dos archivos (`index.html` y `go.html`) que redirigen
+automáticamente a `/pwa/index.html`. Si esos archivos están pusheados a `main` y GitHub
+Pages ya los publicó, podés usar directamente:
+
+| URL corta | Redirige a |
+|---|---|
+| `https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/` | `/pwa/index.html` |
+| `https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/go.html` | `/pwa/index.html` |
+
+Si entrás a la URL raíz y GitHub Pages muestra 404, es porque los redirects del root
+todavía no están pusheados (son `untracked`). Subilos así:
+
+```bash
+git add index.html go.html pwa/go.html
+git commit -m "feat: root redirects for short GitHub Pages URLs"
+git push origin main
+```
+
+Esperá ~1 minuto a que GitHub Pages termine el deploy y listo.
+
+#### 📱 Bookmark / "Add to Home Screen" (sin escribir URLs nunca más)
+
+Esta opción no requiere código ni comandos:
+
+- **Desktop:** Abrí la PWA en tu navegador → `Ctrl+D` (`Cmd+D` en macOS) y guardala en la barra de bookmarks. Un click y ya está.
+- **Android (Chrome):** Abrí la PWA → menú ⋮ → **"Instalar app"** / **"Agregar a pantalla de inicio"**. Queda un ícono nativo en el launcher.
+- **iPhone (Safari):** Abrí la PWA → botón compartir (⬆️ en caja) → **"Agregar a pantalla de inicio"**. Misma experiencia que una app nativa.
+
+#### 💻 Aliases de shell (comandos de terminal)
+
+En `scripts/aliases/` hay tres comandos ejecutables listos para usar. Agregalos a tu `$PATH`
+agregando esta línea al final de tu `~/.bashrc`, `~/.zshrc` o `~/.profile`:
+
+```bash
+export PATH="/root/JOB/CIFRADO-TANGOS/Tango/scripts/aliases:$PATH"
+```
+
+Reabrí tu terminal (o corré `source ~/.bashrc`) y ya podés usar:
+
+| Comando | Qué hace |
+|---|---|
+| `tango` | Abre la PWA en tu navegador predeterminado (usa `xdg-open` en Linux, `open` en macOS, `start` en Windows). |
+| `tango --short` o `tango -s` | Abre la URL corta (raíz del Pages) en vez de la ruta larga a `/pwa/index.html`. |
+| `tango-url` | Imprime la URL completa por salida estándar y la copia automáticamente al clipboard si detecta `xclip`, `wl-copy` o `pbcopy`. Ideal para pegar en chats, mails, notas. |
+| `tango-url --short` o `tango-url -s` | Lo mismo pero imprime/copia la URL corta. |
+| `tango-cli` | Corré el CLI local (`python3 main.py`) desde cualquier carpeta, activando automáticamente el `venv` del proyecto si existe. |
+
+Ejemplo de uso rápido:
+
+```
+$ tango-url
+Tango Cifrado URL (full):
+  https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html
+  (copiado al clipboard con xclip)
+
+$ tango
+✅ Abriendo Tango Cifrado → https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html
+```
+
 ```
 [ Repo privado ]  →  [ setup_private_core.sh / CI ]  →  [ Repo público / GitHub Pages ]
   tangos.json           AES-256-GCM (build bundle)           encrypted-bundle.json
@@ -28,7 +94,9 @@ El corpus y el SALT nunca viajan en texto plano: GitHub Actions los cifra con AE
 | `scripts/build_encrypted_bundle.py` | Genera el bundle cifrado para deploy. Corre en CI, nunca en el browser. |
 | `scripts/decrypt_bundle_cli.py` | Smoke-test CLI para verificar el bundle antes de publicarlo. |
 | `scripts/setup_private_core.sh` | Configura el entorno local clonando el repo privado en un estado "vendored" (pinneado a un commit SHA). |
-| `.github/workflows/build-encrypted-bundle.yml` | GitHub Actions workflow de build. |
+| `scripts/aliases/` | Comandos cortos de terminal: `tango` (abrir PWA), `tango-url` (copiar URL al clipboard), `tango-cli` (wrapper del CLI local). |
+| `.github/workflows/build-encrypted-bundle.yml` | GitHub Actions workflow de build (solo en el repo privado). |
+| `.github/workflows/drift-check.yml` | GitHub Actions workflow semanal: compara el `PRIVATE_CORE_COMMIT` pinneado contra el HEAD del repo privado y abre Issue automático si detecta drift. Requiere el secreto `PRIVATE_REPO_PAT`. |
 | `tests/` | 78 tests: 54 Python + 24 JS, cubriendo cifrado, round-trip, pipeline de bundle, errores de red, seguridad y cobertura. |
 
 ## Setup del CLI (desarrollo / pruebas)
@@ -101,11 +169,12 @@ Ver `MOBILE_TESTING.md` (USB port-forwarding con `chrome://inspect`, camino de p
 
 ## Secretos de GitHub Actions (CI/CD)
 
-Para que el pipeline de despliegue funcione correctamente, el repositorio debe tener configurados los siguientes secretos:
+Para que los pipelines funcionen correctamente, el repositorio público debe tener configurados los siguientes secretos
+(**Settings → Secrets and variables → Actions → New repository secret**):
 
-| Secreto | Descripción |
-|---|---|
-| `CIFRADO_SALT` | Valor numérico secreto usado para enmascarar los IDs de tango. |
-| `CLAVE_DESPLIEGUE` | Contraseña maestra para descifrar el corpus en la PWA (Layer 1). |
-| `ACTIONS_DEPLOY_KEY` | (Opcional) Token para pushear al repo público de GitHub Pages. |
-| `PRIVATE_REPO_PAT` | (Opcional) Personal Access Token para que el workflow de drift-check pueda leer el repo privado. |
+| Secreto | ¿Obligatorio? | Descripción |
+|---|---|---|
+| `CIFRADO_SALT` | Obligatorio (solo en el **repo privado**, para `build-encrypted-bundle.yml`) | Valor numérico secreto usado para enmascarar los IDs de tango. **No** es el KDF salt de PBKDF2, es el offset numérico que se suma al ID del tango antes de escribirlo en el ciphertext. |
+| `CLAVE_DESPLIEGUE` | Obligatorio (solo en el **repo privado**, para `build-encrypted-bundle.yml`) | Contraseña maestra de alta entropía para AES-256-GCM que desencripta el corpus y el SALT en la PWA. Usá `openssl rand -base64 32`, no una frase memorizable. |
+| `ACTIONS_DEPLOY_KEY` | Opcional | Token para pushear automáticamente el bundle cifrado desde el CI del repo privado hacia el repo público de GitHub Pages. Si no lo configuras, tenés que copiar `pwa/encrypted-bundle.json` a mano. |
+| `PRIVATE_REPO_PAT` | Obligatorio para **`drift-check.yml`** en el repo público | Personal Access Token con permisos de **lectura** sobre el repo privado (`tango_corpus_private`). Sin este secreto el workflow semanal no puede consultar el SHA remoto y falla. Se configura en el **repo público** (donde corre `drift-check.yml`), no en el privado. |
