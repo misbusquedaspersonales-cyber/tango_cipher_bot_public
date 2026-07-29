@@ -1,6 +1,35 @@
 # CHANGELOG
 
-## [Unreleased] - 2026-07-25
+## [Unreleased] - 2026-07-29
+
+### Added
+- `scripts/check_pwa_assets.py` — validador bidireccional de assets de la PWA:
+  - **FORWARD**: toda referencia en `manifest.json` (íconos), `index.html` (`@font-face`, `<link>`, `<img src>`) y `service-worker.js` (`SHELL_FILES`) apunta a un archivo que existe en disco.
+  - **REVERSE / huérfanos**: todo `.ttf` / `.png` dentro de `pwa/fonts/` y `pwa/icons/` está referenciado por al menos uno de esos tres archivos (evita publicar fonts/icons muertos que nadie usa pero se siguen subiendo a GitHub Pages).
+  - OFL / LICENSE `.txt` y `.md`, y `encrypted-bundle.json` (cargado por `fetch()` en runtime) se exceptúan explícitamente. Sale con `exit 1` en cualquier problema; correrlo antes de cada PR que toque `pwa/`.
+- `MOBILE_TESTING.md` — guía paso a paso para probar la PWA como app *instalada* en un celular real: USB debug + `chrome://inspect#devices` + port-forward para Android/Chrome, camino HTTPS/producción para iPhone, y checklist (standalone, icons/fonts sin fallback, offline, primer desbloqueo del bundle).
+
+### Fixed
+- **Legibilidad de UI en móvil** — Se reemplazó la pila de tipografías serif (Crimson Pro body + Gloock display) por una pila sans-serif nativa cross-platform: `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`. Esto usa San Francisco en macOS/iOS, Segoe UI en Windows, Roboto en Android — hinting nativo, cero latencia de descarga, sin Times New Roman en ningún fallback. Aumentado el tamaño de fuente base `html` a 17px, `line-height` del body a 1.55, y crecidos elementos clave: inputs 1.1rem, botones 1.05rem/600, chips cifrado 0.9rem, labels con peso 600, header h1 a 2.4rem semibold, salida descifrada/plain 1.1rem con padding, mensajes status/footer/hint crecidos, ancho de columna principal 520px.
+- **Fonts muertas descargadas en vano en móviles** (`pwa/fonts/Gloock-Regular.ttf`, `CrimsonPro-{Regular,Bold,Italic}.ttf` + sus OFL.txt) — limpieza en 3 capas: (1) `@font-face` correspondientes eliminados de `index.html` (solo IBM Plex Mono para `.chip` tokens permanece), (2) `service-worker.js` eliminó las 4 entradas `.ttf` de `SHELL_FILES` y `CACHE_VERSION` fue bumpedeado (`tango-cifrado-v2` → `tango-cifrado-v3`, compartiendo el número que ya reclamó el bundle rebuild + targeted hint enlarge) para que las PWA ya instaladas purguen el caché viejashell, (3) 4 archivos `.ttf` + 2 `OFL.txt` eliminados del árbol de trabajo y de git tracking. IBM Plex Mono + su OFL.txt permanecen.
+- **Hints de pantalla de desbloqueo inconsistentes** — la pantalla de *first-run unlock* pasó a usar la clase semántica `.unlock-hint` (introducida por el parche targeted); la pantalla de *PIN unlock device vault* — que se había quedado con estilos inline después del último targeted rework — también se unificó a `.unlock-hint`, y la regla CSS compartida se amplió con `margin-bottom: 1rem` y `font-size: 1rem` para cubrir ambas pantallas.
+- **PIN device vault no protege corpus + Telegram creds juntos** (P3-2/P3-3 restante) — cableado completo en `app.js`: el toggle *Seguridad del dispositivo* (Settings) migra todo el payload (`tangos` + `salt` + credenciales de Telegram bot-token/chat-id) entre modo sin-fricción IndexedDB directo y bóveda AES-GCM con PBKDF2 por PIN. Ambos viven dentro del mismo payload sellado, así que si se pierde el móvil el atacante no obtiene ni el corpus ni el token de bot con solo leer IndexedDB. `sessionPin` se guarda en memoria solo para re-sellar al guardar settings; se limpia al desactivar PIN o al recargar la página.
+- **Derivación de clave despliegue diferente en macOS/iOS vs Linux/Windows** — `secure-vault.js` `deriveAesKey()` y el lado decrypt de `build_encrypted_bundle.py` ahora aplican Unicode NFKC normalization a `CLAVE_DESPLIEGUE`, así que `ñ` compuesto (U+00F1, Linux/Win) y descompuesto `n` + `˜` (NFD, macOS/iOS input) derivan la misma clave AES y la misma gente no se ve bloqueada.
+- **Fallback keystream reutilizable / two-time pad potencial** — las iteraciones de PBKDF2 para el fallback `#hex` pasaron de 1 (útilmente inútil) a 10.000 en ambos motores. Más importante: el keystream ahora mezcla `tangoId + previous tokens` serializados dentro del salt del KDF, así que la misma posición de token en dos mensajes diferentes produce distinto flujo XOR; romper un fragmento ya no revela las posiciones análogas en los demás.
+- **Límite 4096 chars de Telegram no validado antes del envío** — `telegram_client.py` y `pwa/app.js` `enviarATelegram()` ahora chequean `len(texto) > 4096` por adelantado y devuelven un error descriptivo en español en vez de dejar que Telegram API devuelva un 400 sin contexto. El campo `description` JSON de Telegram también se incorpora al mensaje de error cuando está disponible.
+- **TO_FIX.md entrada P3-5 stale** — se actualizó a estado `🔄 PARCIALMENTE RESUELTO`: las mitigaciones de código (elección aleatoria de verso para matches repetidos, keystream contextual por posición) ya están implementadas y probadas en ambos motores; lo único pendiente es la expansión del corpus a 20+ tangos, que es trabajo de contenido / Fase 2 del ROADMAP, no un bug.
+
+### Changed
+- `README.md` — nueva subsección *Verificar integridad de assets de la PWA* documentando `scripts/check_pwa_assets.py`, y puntero a `MOBILE_TESTING.md` para pruebas en celulares reales, todo bajo *Correr los tests*.
+- `TO_FIX.md` — tabla de resumen de progreso y tabla quick-reference por archivo actualizadas al estado post-limpieza.
+- `ROADMAP.md`, `PASOS_PROYECTO_CIFRADO_TANGOS.md`, `TROUBLESHOOTING.md` — actualizaciones de formato y texto menores para alinear con los cambios Fase 3/4/5.
+
+### Tests
+- `python3 -m pytest tests/ -q` → **45/45 passed**.
+- `npm test` → **19/19 passed**.
+- `python3 scripts/check_pwa_assets.py` → **OK green**.
+
+## [Unreleased legacy] - 2026-07-25 (contenido anterior previo al reorden)
 
 ### Added
 - `scripts/check_coverage.py` y `tests/test_check_coverage.py` — script de utilidad para verificar la cobertura de codificación de un texto de prueba contra el corpus de tangos (Fase 2).
