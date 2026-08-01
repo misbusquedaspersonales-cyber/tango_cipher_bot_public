@@ -106,12 +106,12 @@ Características clave:
 
 ---
 
-### Paso 3: Script de Cifrado para Deploy (`scripts/ci/build_encrypted_bundle.py`)
+### Paso 3: Script de Cifrado para Deploy (`scripts/build_encrypted_bundle.py`)
 
 Corre en GitHub Actions — nunca en el browser. Produce `pwa/encrypted-bundle.json`.
 
 ```
-python3 scripts/ci/build_encrypted_bundle.py \
+python3 scripts/build_encrypted_bundle.py \
   --tangos tangos.json \
   --salt $CIFRADO_SALT \
   --out pwa/encrypted-bundle.json
@@ -121,7 +121,7 @@ Detalles criptográficos:
 - **Algoritmo:** AES-256-GCM
 - **KDF:** PBKDF2-HMAC-SHA256, 600 000 iteraciones, nonce y KDF salt aleatorios por cada build
 - **Output:** JSON con campos `kdf_salt_b64`, `nonce_b64`, `ciphertext_b64`, `aad`, `kdf_iterations`
-- **Verificación:** `scripts/ci/decrypt_bundle_cli.py` como smoke-test en la misma Action
+- **Verificación:** `scripts/decrypt_bundle_cli.py` como smoke-test en la misma Action
 
 ---
 
@@ -136,7 +136,7 @@ on:
     branches: [main]
     paths:
       - "tangos.json"
-      - "scripts/ci/build_encrypted_bundle.py"
+      - "scripts/build_encrypted_bundle.py"
 
 jobs:
   build:
@@ -153,13 +153,13 @@ jobs:
           test "$HAS_SALT"  = true || { echo "❌ CIFRADO_SALT missing"; exit 1; }
           test "$HAS_PAT"   = true || { echo "❌ PUBLIC_REPO_DEPLOY_TOKEN missing"; exit 1; }
       - run: |
-          python3 scripts/ci/build_encrypted_bundle.py \
+          python3 scripts/build_encrypted_bundle.py \
             --tangos tangos.json \
             --salt ${{ secrets.CIFRADO_SALT }} \
             --out pwa/encrypted-bundle.json
         env:
           CLAVE_DESPLIEGUE: ${{ secrets.CLAVE_DESPLIEGUE }}
-      - run: python3 scripts/ci/decrypt_bundle_cli.py pwa/encrypted-bundle.json
+      - run: python3 scripts/decrypt_bundle_cli.py pwa/encrypted-bundle.json
         env:
           CLAVE_DESPLIEGUE: ${{ secrets.CLAVE_DESPLIEGUE }}
       - uses: actions/upload-artifact@{SHA_PINNEADO}
