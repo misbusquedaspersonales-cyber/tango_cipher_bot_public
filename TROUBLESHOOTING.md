@@ -243,3 +243,168 @@ jobs:
 ```
 
 Con ese workflow activo, cada lunes a la mañana GitHub correrá la comprobación sola y, si el privado avanzó, abrirá un Issue automáticamente en este repo público (igual que lo describen TO_FIX.md P3-4 y el Problema 9 arriba).
+
+---
+
+## Problema 12: La PWA no se instala en Android o funciona mal en móvil (deploy a GitHub Pages)
+
+Este problema agrupa todos los fallos móviles Android y de despliegue a Pages. La app está preparada para correr en celulares (tanto en instalación standalone como en navegador), pero hay 7 puntos típicos donde un deploy puede romperse en la práctica. Cada sub-sección abarca un síntoma + diagnóstico + arreglo.
+
+> 📌 Referencia rápida: para validar un deploy nuevo en móvil real, corré primero el checklist de `MOBILE_TESTING.md` §1–§7. Ese documento es release-specific y ya cubre los casos de regresión. Esta sección es para cuando algo falla *igual* y necesitás depurar.
+
+---
+
+### 12.1 Síntoma: Chrome Android no muestra "Instalar app" (solo "Agregar a página principal")
+
+Chrome solo ofrece **Instalar app** (PWA de verdad, standalone, sin barra de navegación) cuando se cumplen **todos** los requisitos siguientes. Falla uno → no hay banner, solo un shortcut de bookmark.
+
+**Diagnóstico uno-por-uno (Chrome → DevTools → Application, conectado por USB con `chrome://inspect#devices`):**
+
+| Paso | Qué mirar | Esperado → ¿Qué pasa si falla? |
+|---|---|---|
+| 1 | `pwa/manifest.json` linkeado en `index.html` | Debe existir `<link rel="manifest" href="./manifest.json">` en `<head>`. Si no está → agregalo y pusheá de nuevo. |
+| 2 | Manifest carga por HTTP 200 | En DevTools → Application → Manifest. Si dice "no manifest found" o HTTP 404 → falta el archivo o el path `/pwa/manifest.json` no coincide. |
+| 3 | `display: standalone` en manifest | Campo obligatorio. Si dice `browser` o no está → Chrome nunca ofrece "Instalar app". |
+| 4 | Ícono 192×192 PNG + Ícono 512×512 PNG | Deben estar ambos, tipo `image/png`, `sizes` correcto. **Si falta cualquiera de los dos → no hay install prompt.** |
+| 5 | Service Worker registrado + handler `fetch` | DevTools → Application → Service Workers. Si "Registration failed" o "No service workers detected" → abrí Consola y buscá errores de `serviceWorker.register()`. Los más comunes: (a) SW servido con MIME type `text/html` porque `.nojekyll` faltó y Jekyll lo transformó, (b) path relativo mal: el SW es `./service-worker.js` y debe estar en la misma carpeta que `index.html` (scope). |
+| 6 | Corriendo sobre **HTTPS real** o `localhost` | El deploy de Pages lo hace HTTPS automático con `https_enforced=true`. Si estás probando desde `http://192.168.1.x:puerto` en LAN → Chrome bloquea la instalación. Solo se puede instalar desde `localhost` (loopback) o HTTPS. |
+| 7 | HTTPS sin errores de certificado | Si el navegador marca "⚠️ No seguro" en Pages → probablemente el custom domain tiene certificado roto. Sin custom domain Pages lo hace bien auto. |
+
+**Arreglo más común de todos los casos (80%):** falta `.nojekyll` y los assets `service-worker.js`, `manifest.json`, o `fonts/` con guion bajo están siendo omitidos por Jekyll. Agregalo en **ambos** niveles:
+```bash
+ls -la .nojekyll pwa/.nojekyll
+# Si alguno falta:
+touch .nojekyll pwa/.nojekyll && git add .nojekyll pwa/.nojekyll && git commit && git push
+```
+
+---
+
+### 12.2 Síntoma: Las URLs cortas dan 404 (`/` raíz o `/go.html`)
+
+Estos redirects existen para no tener que escribir la ruta larga en el teclado del móvil (errores de tipeo muy frecuentes). Si dan 404 es **siempre** uno de estos dos casos:
+
+**Caso A: Los archivos no están pusheados a `main` (untracked).**
+```bash
+git status index.html go.html pwa/go.html
+# Si aparecen en "Untracked files" → no van a GitHub Pages.
+git add index.html go.html pwa/go.html
+git commit -m "feat: root short URL redirects" && git push origin main
+```
+
+**Caso B: El push entró pero GitHub Pages aún no construyó.**
+Pages suele tardar 30–90s después de un push. Esperá, hacé **hard-refresh** en Chrome Android (menú ⋮ → botón ↻ circular) y si aún así falla esperá 2 minutos más. Podés chequear el estado de construcción en:
+```
+Repo público → Settings → Pages → "Your site is live at https://…"
+                                                        ↑ debe decir "published" hace <2 min.
+```
+
+---
+
+### 12.3 Síntoma: "Instalé la app pero sigue apareciendo la barra de URL de Chrome"
+
+Significa que no está en modo `standalone`, sino que es un shortcut de browser. Diagnóstico:
+
+1. **Borrá el shortcut actual** de Home Screen (mantenelo apretado → quitar) — no lo reutilices.
+2. Volvé a abrir **directamente** `https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html` (no desde el redirect primero).
+3. Esperá que cargue completamente (incluido el SW install, ~1–2s).
+4. ⋮ → **Instalar app** (NO "Agregar a página principal").
+
+Si aún así sigue con barra URL → revisá `apple-mobile-web-app-capable` meta tag en `index.html` (solo iOS lo requiere; Android usa manifest). Para Android el único requisito es `display: standalone` en `manifest.json` y que el Service Worker scope cubra `./` (lo hace porque está en la misma carpeta).
+
+---
+
+### 12.4 Síntoma: Modo Avión no funciona o muestra error críptico "HTTP 0"
+
+Hay **dos escenarios** deliberadamente distintos. El parche de caché v5→v7 arregló el error "HTTP 0 sin contexto". Si volvés a verlo, es que tu teléfono aún tiene un Service Worker **viejo** (versión pre-v7).
+
+**Escenario esperado A — Bundle ya cacheado (uso diario offline):**
+App que ya abriste y desbloqueaste una vez → en Modo Avión abre instantáneo, compositor funciona sin conexión. Si no pasa:
+- DevTools → Application → Service Workers → Bypass for network OFF (sino sw está desactivado)
+- DevTools → Application → Cache Storage → debe existir `tango-cifrado-v7-shell` y `tango-cifrado-v7-bundle`. Si los nombres dicen `v5` o no hay bundle cacheado → te falta 1 vez haber abierto con internet.
+
+**Escenario esperado B — Sin bundle + Sin red (verdadero primer run en avión):**
+Aparece mensaje en **español claro**, no un HTTP 0 críptico:
+> *"Sin conexión y no hay una copia guardada del paquete cifrado. Conectate a internet y probá de nuevo."*
+
+Si en vez de eso ves `No se pudo descargar ./encrypted-bundle.json (HTTP 0)` → **SW viejo**. Procedimiento para forzar update en Android:
+```
+Chrome ⋮ → ⓘ (info del sitio) → Permisos y almacenamiento → Administrar espacio → Borrar almacenamiento.
+```
+Cerrá y volvé a abrir. El SW recién instalado es el v7. Si es una instalación standalone (no Chrome tab), tenés que **desinstalar y reinstalar** la app (settings Android → Apps → Tango → Desinstalar) porque las actualizaciones de SW en modo standalone a veces tardan 24h por política de Chrome.
+
+---
+
+### 12.5 Síntoma: Teclado QWERTY para el PIN (en vez de numérico) / notch corta contenido
+
+**PIN con teclado equivocado (QWERTY):** Faltan los `inputmode="numeric"` en los campos PIN. Verificá `index.html` → el `<input id="new-pin">`, `<input id="confirm-pin">`, y `<input id="device-pin">` tienen que tener **tres** de ellos con `inputmode="numeric"`. Si no → Android no sabe que es campo numérico y abre QWERTY.
+
+**Contenido cortado por notch / cámara selfie / punch-hole (safe-area):**
+- Body debe tener padding con `env(safe-area-inset-top/right/bottom/left)` (línea 71 de `index.html`)
+- Meta viewport debe incluir `viewport-fit=cover` (línea 5 de `index.html`)
+- Si falta cualquiera → el notch tapa el título / el botón Desbloquear. No requiere re-deploy a veces si el CSS ya está bien; si el teléfono tiene Android 10+ y safe-area desactivado globalmente es un setting del launcher.
+
+---
+
+### 12.6 Síntoma: Actualicé el corpus pero la app móvil sigue mostrando tangos viejos (no llega el bundle nuevo)
+
+Por diseño el bundle usa **network-first** para no depender del HTTP cache de Pages (10 min default). Pero:
+1. **Asegurate de cerrar y reabrir** la app (no solo cambiar de app). `registration.update()` corre en cada carga, pero si la app quedó en background por mucho tiempo no dispara.
+2. Si es instalada standalone, a veces Chrome retrasa la comprobación de update de SW a 24h → podés forzar desinstalando / reinstalando.
+3. **Confirmá que el bundle remoto efectivamente cambió**:
+   ```
+   curl -s -D- -H 'Cache-Control: no-cache' \
+     https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/encrypted-bundle.json \
+     | grep -i generated_at
+   ```
+   Si devuelve la fecha vieja (2026-07-29 en vez de la nueva) → el workflow `build-encrypted-bundle.yml` del repo privado **no corrió exitosamente** o el paso `deploy-to-public-repo` quedó en `📭 skipped (bundle already matches)` porque la comparación de SHA dijo igual. Volvé a correr el workflow dispatch en el privado y mirá el Step "bundle-diff": `OLD_SHA` vs `NEW_SHA` deben diferir para que haga push.
+
+---
+
+### 12.7 Checklist ultra rápido: 6 comandos + 3 clicks para aprobar un deploy móvil
+
+Previo a dar un deploy por bueno en un celular real, ejecutá **en la raíz de la copia local del repo público**:
+
+```bash
+# 1) ¿.nojekyll en AMBOS niveles?
+ls -la .nojekyll pwa/.nojekyll
+# → OK: dos lineas, ninguno muestra "No such file"
+
+# 2) ¿Short URL redirects tracked?
+git status --short index.html go.html pwa/go.html
+# → OK: no aparecen (están committed)
+# → MAL: aparece ?? (untracked) → git add && git commit && push
+
+# 3) ¿Asset integrity (ninguna referencia rota en HTML/JS)?
+python3 scripts/check_pwa_assets.py
+# → OK: "todos los assets referenciados existen..."
+
+# 4) ¿Test suite pública pasa (13 Python + 19 JS)?
+python3 -m pytest tests/test_build_encrypted_bundle.py tests/test_telegram_client.py -q
+npm test
+# → OK: 13 passed / 19 pass
+
+# 5) ¿Bundle schema correcto y generated_at nuevo?
+python3 -c '
+import json,base64,pathlib
+b=json.loads(pathlib.Path("pwa/encrypted-bundle.json").read_text())
+assert b["version"]==1 and b["aad"]=="tango-cifrado-bundle-v1"
+assert len(base64.b64decode(b["nonce_b64"]))==12
+assert len(base64.b64decode(b["kdf_salt_b64"]))==16
+assert "generated_at" in b; print("generated_at =",b["generated_at"])'
+# → OK: generated_at posterior a tu deploy date
+
+# 6) ¿Push command es plain (no fake flags de force)?
+grep -A3 "Push to PUBLIC repo" .github/workflows/build-encrypted-bundle.yml | grep "git push"
+# → OK: exactamente "git push origin main"
+# → MAL: aparece "--ff-only" (flag inválido, rompe antes de conectarse) o "--force-with-lease" (sobreescribe)
+```
+
+**Luego, en el celular Android (3 clicks):**
+```
+Click 1: Abrir short URL (https://…/tango_cipher_bot_public/)  →  redirige en ≤1s
+Click 2: ⋮ → Instalar app → abrir desde ícono                     →  sin barra URL
+Click 3: Desbloquear una vez, activar Modo Avión, volver a abrir  →  abre instantáneo,
+                                                                      sin error críptico.
+```
+
+Si las 6 comandos + 3 clicks pasan, el deploy está aprobado para uso diario móvil Android y GitHub Pages.

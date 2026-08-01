@@ -195,8 +195,14 @@ async function handleUnlockSubmit(event) {
     setStatus(statusEl, "Descargando paquete cifrado…", "info");
 
     try {
-        const resp = await fetch(BUNDLE_URL);
+        const resp = await fetch(BUNDLE_URL, { cache: "no-cache" });
         if (!resp.ok) {
+            if (resp.headers.get("X-Tango-Offline") === "1") {
+                throw new Error(
+                    "Sin conexión y no hay una copia guardada del paquete cifrado. " +
+                    "Conectate a internet y probá de nuevo."
+                );
+            }
             throw new Error(`No se pudo descargar ${BUNDLE_URL} (${resp.status})`);
         }
         const bundle = await resp.json();
@@ -396,7 +402,7 @@ function showBundleGeneratedAt(iso) {
 // was last known (from localStorage) stays displayed.
 async function refreshBundleGeneratedAt() {
     try {
-        const resp = await fetch(BUNDLE_URL);
+        const resp = await fetch(BUNDLE_URL, { cache: "no-cache" });
         if (!resp.ok) return;
         const bundle = await resp.json();
         if (bundle.generated_at) {

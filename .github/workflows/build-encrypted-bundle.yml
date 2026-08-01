@@ -1,14 +1,17 @@
 name: Build encrypted bundle
 
-# Runs in the PRIVATE repo. Produces pwa/encrypted-bundle.json, which is the
-# only artifact that should ever reach the PUBLIC repo / GitHub Pages.
+# Runs in the PRIVATE repo. Produces pwa/encrypted-bundle.json, then
+# auto-commits + pushes it to the PUBLIC repo so GitHub Pages rebuilds with
+# the latest corpus. No more manual download-copy-commit dance.
 #
-# Required repo secret: CLAVE_DESPLIEGUE (high-entropy, e.g. `openssl rand -base64 32`)
-# Optional repo secret: PUBLIC_REPO_DEPLOY_TOKEN (fine-grained PAT, "contents: write"
-#   scoped ONLY to the public repo) if you want this workflow to also push the
-#   result there. Left as a manual step below if you'd rather review each diff
-#   before it goes public -- recommended, since this file is your only real
-#   defense if the bundle format or KDF ever needs to change.
+# Required repo secrets (in the PRIVATE repo's Settings → Secrets):
+#   - CLAVE_DESPLIEGUE     → deploy passphrase (same value as .env CLAVE_DESPLIEGUE)
+#   - CIFRADO_SALT         → numeric salt for ID masking (same value as .env CIFRADO_SALT)
+#   - PUBLIC_REPO_DEPLOY_TOKEN → Personal Access Token with "repo" scope,
+#       authorized on the PUBLIC repo tango_cipher_bot_public. The PAT in .env
+#       (GITHUB_TOKEN=ghp_...) works for this because it has admin/push on both
+#       repos; a fine-grained PAT scoped to "Contents: write" on only the
+#       public repo is safer long-term and is equally supported here.
 
 on:
   push:
@@ -21,12 +24,16 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      bundle_changed: ${{ steps.bundle-diff.outputs.changed }}
+      bundle_hash: ${{ steps.bundle-hash.outputs.sha }}
+      generated_at: ${{ steps.bundle-meta.outputs.generated_at }}
     steps:
       # Actions pinned to commit SHA, not a tag/branch -- a tag can be moved
       # by the upstream maintainer (or an attacker who compromises their
       # account) to point at malicious code that would run with access to
       # CLAVE_DESPLIEGUE. Pin, and bump deliberately when you want an update.
-      - name: Checkout
+      - name: Checkout (private repo — tangos + build script)
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Set up Python
@@ -37,7 +44,20 @@ jobs:
       - name: Install dependencies
         run: pip install cryptography==46.0.6
 
+      - name: Required secrets guard
+        env:
+          HAS_CLAVE: ${{ secrets.CLAVE_DESPLIEGUE != '' }}
+          HAS_SALT: ${{ secrets.CIFRADO_SALT != '' }}
+          HAS_PAT: ${{ secrets.PUBLIC_REPO_DEPLOY_TOKEN != '' }}
+        run: |
+          set -e
+          test "$HAS_CLAVE" = true || { echo "❌ Secret CLAVE_DESPLIEGUE missing. Create it in the PRIVATE repo's Settings → Secrets and variables → Actions."; exit 1; }
+          test "$HAS_SALT"  = true || { echo "❌ Secret CIFRADO_SALT missing. Create it in the PRIVATE repo's Settings → Secrets and variables → Actions."; exit 1; }
+          test "$HAS_PAT"   = true || { echo "❌ Secret PUBLIC_REPO_DEPLOY_TOKEN missing. Create it in the PRIVATE repo with 'repo' scope and push access to the PUBLIC repo."; exit 1; }
+          echo "✅ Required secrets configured: CLAVE_DESPLIEGUE, CIFRADO_SALT, PUBLIC_REPO_DEPLOY_TOKEN."
+
       - name: Build encrypted bundle
+        id: build-step
         env:
           CLAVE_DESPLIEGUE: ${{ secrets.CLAVE_DESPLIEGUE }}
         run: |
@@ -46,7 +66,7 @@ jobs:
             --salt ${{ secrets.CIFRADO_SALT }} \
             --out pwa/encrypted-bundle.json
 
-      - name: Smoke-test the bundle decrypts correctly
+      - name: Smoke-test the bundle decrypts correctly (round-trip AES-GCM tag)
         env:
           CLAVE_DESPLIEGUE: ${{ secrets.CLAVE_DESPLIEGUE }}
         run: python3 scripts/decrypt_bundle_cli.py pwa/encrypted-bundle.json
@@ -64,9 +84,133 @@ jobs:
           path: pwa/encrypted-bundle.json
           retention-days: 7
 
-      # Manual step (recommended): download the artifact above, review the
-      # diff, and copy it into the public repo yourself. Automating that push
-      # is possible (a second job with a scoped deploy token) but every extra
-      # step that touches CLAVE_DESPLIEGUE-derived output is one more place a
-      # misconfigured workflow could leak something -- keep this boundary
-      # manual until you're confident in the pipeline.
+      - name: Extract bundle metadata (hash + generated_at) for downstream diff
+        id: bundle-meta
+        run: |
+          python3 - <<'PY'
+          import json, hashlib, os, pathlib
+          data_b = pathlib.Path("pwa/encrypted-bundle.json").read_bytes()
+          parsed = json.loads(data_b.decode())
+          sha = hashlib.sha256(data_b).hexdigest()[:12]
+          gen = parsed.get("generated_at", "unknown")
+          # Write both outputs atomically to GITHUB_OUTPUT so downstream
+          # (deploy-to-public-repo) can use needs.build.outputs.generated_at
+          # and the deploy summary can compare old_sha/new_sha without
+          # recomputing.
+          out_path = os.environ["GITHUB_OUTPUT"]
+          with open(out_path, "a") as out:
+              out.write(f"sha={sha}\n")
+              out.write(f"generated_at={gen}\n")
+          print(f"sha={sha}")
+          print(f"generated_at={gen}")
+          PY
+
+  deploy-to-public-repo:
+    needs: build
+    if: success()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read   # this runner never needs push on the *private* repo
+    steps:
+      - name: Checkout (PUBLIC repo, full history for fast-forward push)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: misbusquedaspersonales-cyber/tango_cipher_bot_public
+          ref: main
+          token: ${{ secrets.PUBLIC_REPO_DEPLOY_TOKEN }}
+          path: public-repo
+          fetch-depth: 0
+
+      - name: Download newly built bundle from build job
+        uses: actions/download-artifact@35b094a58f576c211c81314e67e0e342214cb5cc # v4.3.2
+        with:
+          name: encrypted-bundle
+          path: new-bundle
+
+      - name: Compute public-repo current bundle SHA vs. new SHA
+        id: bundle-diff
+        run: |
+          set -e
+          NEW_SHA=$(sha256sum new-bundle/encrypted-bundle.json | cut -c1-12)
+          if [ -f public-repo/pwa/encrypted-bundle.json ]; then
+            OLD_SHA=$(sha256sum public-repo/pwa/encrypted-bundle.json | cut -c1-12)
+          else
+            OLD_SHA="(missing)"
+          fi
+          echo "old_sha=$OLD_SHA"
+          echo "new_sha=$NEW_SHA"
+          echo "old_sha=$OLD_SHA" >> "$GITHUB_OUTPUT"
+          echo "new_sha=$NEW_SHA" >> "$GITHUB_OUTPUT"
+          if [ "$OLD_SHA" = "$NEW_SHA" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "📭 Bundle SHA unchanged ($NEW_SHA) vs. public repo copy. Skipping deploy — no point in a no-op Pages rebuild."
+          else
+            echo "changed=true"  >> "$GITHUB_OUTPUT"
+            echo "🔁 Bundle SHA differs ($OLD_SHA → $NEW_SHA). Will commit & push to public repo main, triggering Pages rebuild."
+          fi
+
+      - name: Configure git commit identity for automated bundle deploy bot
+        if: steps.bundle-diff.outputs.changed == 'true'
+        run: |
+          git config --global user.name  "tango-bundle-deploy-bot"
+          git config --global user.email "tango-bundle-deploy-bot@users.noreply.github.com"
+
+      - name: Commit new bundle into PUBLIC repo main
+        if: steps.bundle-diff.outputs.changed == 'true'
+        env:
+          GEN_AT: ${{ needs.build.outputs.generated_at }}
+          OLD_SHA: ${{ steps.bundle-diff.outputs.old_sha }}
+          NEW_SHA: ${{ steps.bundle-diff.outputs.new_sha }}
+          GH_EVENT: ${{ github.event_name }}
+          GH_ACTOR: ${{ github.actor }}
+          GH_SHA: ${{ github.sha }}
+        run: |
+          set -e
+          cd public-repo
+          cp ../new-bundle/encrypted-bundle.json pwa/encrypted-bundle.json
+          git add pwa/encrypted-bundle.json
+          if git diff --cached --quiet; then
+            echo "📭 Post-copy diff is empty (shouldn't happen if changed=true was set). Exiting without commit."
+            exit 0
+          fi
+          # Write commit msg to temp file so multi-line body doesn't confuse
+          # YAML parser. Values are env vars (not ${{ }} inline) so there's no
+          # double-substitution or quote/escaping issues either.
+          cat > /tmp/commit_msg.txt <<EOF
+          deploy(encrypted-bundle): $GEN_AT — $OLD_SHA → $NEW_SHA
+
+          Auto-generated commit from build-encrypted-bundle.yml in tango_corpus_private.
+          Corpus SHA: $NEW_SHA (12 first chars of sha256(bundle JSON))
+          Trigger: $GH_EVENT by $GH_ACTOR on commit $GH_SHA
+          EOF
+          git commit -F /tmp/commit_msg.txt
+          rm /tmp/commit_msg.txt
+
+      - name: Push to PUBLIC repo main → triggers GitHub Pages rebuild
+        if: steps.bundle-diff.outputs.changed == 'true'
+        run: |
+          cd public-repo
+          # Plain push = git's DEFAULT behavior is already fast-forward-only.
+          # No --force flag of any kind = remote HEAD diverged? Push fails
+          # loudly with exit code 1, no risk of overwriting a manual edit.
+          # (git push has never had --ff-only as a valid flag; that option
+          #  belongs to git merge/pull only. A bare `git push` is what
+          #  actually realizes the "never force-push" safety guarantee.)
+          git push origin main
+
+      - name: Deploy summary
+        run: |
+          GEN_AT="${{ needs.build.outputs.generated_at }}"
+          OLD="${{ steps.bundle-diff.outputs.old_sha }}"
+          NEW="${{ steps.bundle-diff.outputs.new_sha }}"
+          CHANGED="${{ steps.bundle-diff.outputs.changed }}"
+          echo "=== Deploy to public repo: $CHANGED ==="
+          echo "  Bundle generated_at : $GEN_AT"
+          echo "  Public repo SHA     : $OLD"
+          echo "  Build SHA           : $NEW"
+          echo "  Pages URL           : https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/encrypted-bundle.json"
+          if [ "$CHANGED" = "true" ]; then
+            echo "  Status              : ✅ pushed (Pages rebuild in progress, 30-90s)"
+          else
+            echo "  Status              : 📭 skipped (bundle already matches public repo)"
+          fi

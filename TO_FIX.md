@@ -5,13 +5,13 @@ Ordered by priority: P0 (critical) → P3 (low).
 
 ## Progress Summary
 
-| Priority | Total | Done | Pending |
-|---|---|---|---|
-| 🔴 P0 (Critical) | 2 | 2 | 0 |
-| 🟠 P1 (High) | 5 | 5 | 0 |
-| 🟡 P2 (Medium) | 5 | 5 | 0 |
-| 🟢 P3 (Low) | 6 | 6 | 0 |
-| **Total** | **18** | **18** | **0** |
+| Priority | Total | Done | Partial 🔄 | Pending |
+|---|---|---|---|---|
+| 🔴 P0 (Critical) | 2 | 2 | 0 | 0 |
+| 🟠 P1 (High) | 5 | 5 | 0 | 0 |
+| 🟡 P2 (Medium) | 5 | 5 | 0 | 0 |
+| 🟢 P3 (Low) | 6 | 5 | 1 (P3-5) | 0 |
+| **Total** | **18** | **17** | **1 (P3-5)** | **0** |
 
 ---
 
@@ -222,12 +222,14 @@ Ordered by priority: P0 (critical) → P3 (low).
 
 ### [x] P2-4: Stale `pwa/encrypted-bundle.json` Committed in Public Repo
 
-- **File**: `pwa/encrypted-bundle.json`
-- **Problem**: The file is checked in to version control, and there's no indication when it was last regenerated or with which parameters. The CI workflow uploads it as a 7-day artifact but recommends a **manual copy step** into the public repo (line 67–70 comments in the workflow). That manual boundary is likely to drift — the committed file will be weeks/months behind the private `tangos.json`.
+- **File**: `pwa/encrypted-bundle.json`, `.github/workflows/build-encrypted-bundle.yml`
+- **Problem**: The file is checked in to version control, and there's no indication when it was last regenerated or with which parameters. Up to 2026-07-31 the CI workflow uploaded it as a 7-day artifact but recommended a **manual copy step** into the public repo (the old lines 67–70 comments in the workflow). That manual boundary was certain to drift — the committed file would be weeks/months behind the private `tangos.json`.
 - **Impact**: A new user cloning the public repo and opening the PWA locally uses a stale bundle. If the corpus/SALT changed, ciphertext from the CLI (which uses the latest private corpus) won't decrypt in the PWA, and vice-versa.
-- **Fix**:
-  1. Add a CI step that auto-commits the new bundle to the public repo using a **scoped deploy PAT** (the workflow already outlines this as optional — make it mandatory or document the drift risk clearly).
-  2. Include a `generated_at` ISO timestamp in the bundle JSON schema (bump `version` to 2, add the field as optional). The PWA can then display "Bundle actualizado el DD/MM/AAAA" on the settings screen so the user knows it's stale.
+- **Fix (ambas mitigaciones implementadas el 2026-07-31)**:
+  1. **Auto-commit job added**: `build-encrypted-bundle.yml` now has a second job `deploy-to-public-repo` (runs-on ubuntu, needs build, `if: success()`). It checks out the **PUBLIC** repo via `repository:` + token `PUBLIC_REPO_DEPLOY_TOKEN`, downloads the artifact, runs a SHA-256 comparison against `public-repo/pwa/encrypted-bundle.json`, and **only commits if the hash actually changed** (no-op pushes on identical corpus). Push uses `git push --ff-only` to never force-push over a manual reviewer commit. Commits are authored by `tango-bundle-deploy-bot@users.noreply.github.com` with body "Trigger: event_name by actor on commit sha" for audit.
+  2. **`generated_at` ISO timestamp** already present in the bundle JSON schema (added during the 2026-07-29 bundle rebuild), rendered in the PWA Settings panel via `refreshBundleGeneratedAt()` so users can see "Corpus actualizado el DD/MM/AAAA".
+  3. **Pre-flight secrets guard**: New step "Required secrets guard" at the top of `build` fails early with explicit messages if `CLAVE_DESPLIEGUE`, `CIFRADO_SALT`, or `PUBLIC_REPO_DEPLOY_TOKEN` are missing from the **private** repo's Secrets — no more silent "step 3 fails because --salt got empty string" runs.
+- **Secret setup**: In the **PRIVATE** repo (tango_corpus_private) Settings → Secrets and variables → Actions, add `PUBLIC_REPO_DEPLOY_TOKEN` = a **fine-grained PAT** restricted to *only* the PUBLIC repo (`tango_cipher_bot_public`) with permission **Contents: Read and write** on that repo (least privilege). Do NOT reuse an admin-scoped or multi-repo personal token for this unattended CI job — if the token is ever accidentally exposed in a log, its blast radius must be limited to pushing `pwa/encrypted-bundle.json` updates and nothing else. Regenerate any token whose permissions or prefix fragment were ever written into a committed file (cheap insurance).
 
 ---
 
@@ -297,6 +299,7 @@ There's no dependency-pinning tooling (like `pip-tools`, `npm lockfile`, `renova
   3. If `PRIVATE_CORE_COMMIT` in the script differs → open a PR or file an Issue to bump it.
 
 - **Resolved**: Added `.github/workflows/drift-check.yml` (commit 2026-07-29) which runs weekly on Mondays (08:00 UTC) and uses `PRIVATE_REPO_PAT` to fetch the remote SHA via `git ls-remote` without fully cloning. If it differs from `PRIVATE_CORE_COMMIT`, it opens a GitHub Issue automatically notifying the maintainer of the drift. The workflow also deduplicates (won't open a second issue if an open `drift`-labeled issue already mentions the same remote SHA) and supports `workflow_dispatch` for manual re-checks from the Actions tab.
+  - ⚠️ **Discrepancia documentada (2026-07-26 → 2026-07-29)**: esta entrada se marcó `[x]` resuelto el 2026-07-26 (revisión inicial) pero el archivo `drift-check.yml` no se creó físicamente hasta el 2026-07-29. Durante esos 3 días TO_FIX.md decía ✅ y el repo no tenía el YAML. El hueco está documentado explícitamente en **TROUBLESHOOTING.md Problema 11** (con pasos de comprobación manual y el YAML listo para copiar) y mencionado con callouts ⚠️ en los Problemas 9 y 10 del mismo documento.
 
 ---
 
@@ -339,7 +342,7 @@ There's no dependency-pinning tooling (like `pip-tools`, `npm lockfile`, `renova
 | ✅ | P2-1 | `telegram_client.py`, `pwa/app.js` |
 | ✅ | P2-2 | `README.md`, optionally `.github/workflows/` (add CI check) |
 | ✅ | P2-3 | `package.json`, `package-lock.json` |
-| ✅ | P2-4 | `.github/workflows/build-encrypted-bundle.yml`, `scripts/build_encrypted_bundle.py` |
+| ✅ | P2-4 | `.github/workflows/build-encrypted-bundle.yml` (nuevo job `deploy-to-public-repo` + pre-flight secrets guard), `scripts/build_encrypted_bundle.py`, `pwa/app.js:403` (refreshBundleGeneratedAt muestra `generated_at`) |
 | ✅ | P2-5 | `pwa/service-worker.js` |
 | ✅ | P3-1 | `README.md`, `CHANGELOG.md` |
 | ✅ | P3-2 | `pwa/app.js`, `pwa/index.html`, `pwa/secure-vault.js`, `ROADMAP.md`, `PASOS_PROYECTO_CIFRADO_TANGOS.md` |
