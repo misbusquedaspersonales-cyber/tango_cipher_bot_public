@@ -92,8 +92,8 @@ $ tango
 | `main.py` | Shim de entrada: ajusta `sys.path` y delega a `tango_cifrado.cli`. |
 | `telegram_client.py` | Shim de re-exportación: mantiene compatibilidad hacia atrás para tests y callers externos. |
 | `secure-vault.js` | Gestión de credenciales en el browser (Layer 1: bundle deploy, Layer 2: PIN opcional, flujo sin fricción por defecto). |
-| `scripts/ci/build_encrypted_bundle.py` | Genera el bundle cifrado para deploy. Corre en CI, nunca en el browser. |
-| `scripts/ci/decrypt_bundle_cli.py` | Smoke-test CLI para verificar el bundle antes de publicarlo. |
+| `scripts/ci/build_encrypted_bundle.py` | Copia de referencia del script homónimo del repo privado. Usada por `tests/python/test_build_encrypted_bundle.py`. **No corre en CI** — la versión activa en producción vive en el repo privado en `scripts/build_encrypted_bundle.py`. Mantenerlas en sincronía a mano. |
+| `scripts/ci/decrypt_bundle_cli.py` | Ídem — copia de referencia local. La versión activa está en el repo privado. |
 | `scripts/dev/setup_private_core.sh` | Configura el entorno local clonando el repo privado en un estado "vendored" (pinneado a un commit SHA). |
 | `scripts/aliases/` | Comandos cortos de terminal: `tango` (abrir PWA), `tango-url` (copiar URL al clipboard), `tango-cli` (wrapper del CLI local). |
 | `.github/workflows/build-encrypted-bundle.yml` | GitHub Actions workflow de build (solo en el repo privado). |

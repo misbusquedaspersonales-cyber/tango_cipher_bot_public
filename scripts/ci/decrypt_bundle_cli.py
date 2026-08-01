@@ -8,6 +8,12 @@ to the public repo. NOT meant to run in the browser -- that side uses
 SubtleCrypto in secure-vault.js. This mirrors that logic in Python so you
 can smoke-test the pipeline with `pytest` or a CI step without a browser.
 
+IMPORTANT — TWO COPIES EXIST:
+  - Private repo: scripts/decrypt_bundle_cli.py  ← runs in production CI
+  - Public repo:  scripts/ci/decrypt_bundle_cli.py  ← reference copy for local tests
+
+If you edit this public copy, apply the same change to the private repo's copy.
+
 Usage:
     CLAVE_DESPLIEGUE=<secret> python3 scripts/decrypt_bundle_cli.py pwa/encrypted-bundle.json
 """

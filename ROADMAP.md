@@ -28,8 +28,8 @@ El pipeline de despliegue los cifra antes de publicar.
 - [x] Crear repo privado con el código fuente — ej: `tangos-cipher-source`
 - [x] Crear repo público vacío para GitHub Pages — ej: `tangos-cipher-pwa`
   > Ambos repos deben compartir el mismo prefijo (ej: `tangos-`) para aparecer juntos en la lista de repositorios de GitHub.
-- [x] `scripts/ci/build_encrypted_bundle.py` — cifra `tangos.json` + SALT con AES-256-GCM
-- [x] `scripts/ci/decrypt_bundle_cli.py` — smoke-test CLI para verificar el bundle antes del deploy
+- [x] `scripts/build_encrypted_bundle.py` (private repo) — cifra `tangos.json` + SALT con AES-256-GCM. Copia de referencia en `scripts/ci/` del repo público (usada por tests locales — ver nota en ese archivo).
+- [x] `scripts/decrypt_bundle_cli.py` (private repo) — smoke-test CLI para verificar el bundle antes del deploy. Copia de referencia en `scripts/ci/` del repo público.
 - [x] `.github/workflows/build-encrypted-bundle.yml` — GitHub Action que genera el bundle en cada push
 
 ## Fase 4: Motor JavaScript (`cipherEngine.js`) ✅ Completado

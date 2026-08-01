@@ -8,6 +8,14 @@ and the tango-ID-masking offset (referred to elsewhere in this project as
 CLAVE_DESPLIEGUE, and writes a public-safe encrypted bundle that gets shipped
 to the PUBLIC repo (GitHub Pages / PWA static assets).
 
+IMPORTANT — TWO COPIES EXIST:
+  - Private repo: scripts/build_encrypted_bundle.py  ← runs in production CI
+  - Public repo:  scripts/ci/build_encrypted_bundle.py  ← reference copy for local tests
+
+The workflow's `run:` commands reference the private repo's path. If you edit
+this public copy, apply the same change to the private repo's copy. They must
+stay in sync or the next CI run will produce a bundle from stale logic.
+
 Design notes (read before changing anything):
 
 - KDF: PBKDF2-HMAC-SHA256, not Argon2id/scrypt. This is a deliberate choice,

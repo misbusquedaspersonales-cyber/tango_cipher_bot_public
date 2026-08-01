@@ -86,7 +86,8 @@
 - `scripts/dev/` — `check_pwa_assets.py`, `setup_private_core.sh`.
 - `scripts/aliases/` — unchanged.
 - Path references fixed inside moved files (`../../private_core`, `parent.parent.parent/"pwa"`).
-- All CI workflows, README, PASOS, ROADMAP, TROUBLESHOOTING updated.
+- `check-pwa-assets.yml` and all doc references updated to `scripts/dev/check_pwa_assets.py`.
+- **`build-encrypted-bundle.yml` run: paths NOT updated** — this workflow runs in the private repo's CI checkout, where the scripts still live at the flat `scripts/build_encrypted_bundle.py` path. The `scripts/ci/` copies in this public repo are reference copies for local tests only; they are not what runs in production CI. Keep both in sync by hand when logic changes. See also: `scripts/ci/build_encrypted_bundle.py` and `decrypt_bundle_cli.py` docstrings.
 
 ---
 

@@ -108,7 +108,7 @@ Características clave:
 
 ### Paso 3: Script de Cifrado para Deploy (`scripts/build_encrypted_bundle.py`)
 
-Corre en GitHub Actions — nunca en el browser. Produce `pwa/encrypted-bundle.json`.
+> **Repo privado.** Este script vive en `scripts/build_encrypted_bundle.py` dentro del repo privado (`tango_corpus_private`). Hay una copia de referencia en el repo público en `scripts/ci/build_encrypted_bundle.py` usada por los tests locales — pero **el que corre en producción CI es el del repo privado**. Si editás la copia pública, actualizá también la privada.
 
 ```
 python3 scripts/build_encrypted_bundle.py \
