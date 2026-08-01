@@ -128,9 +128,26 @@ Cuando detectes drift (por alerta automática o por comprobación manual), deber
 
 ---
 
-## Problema 10: El workflow `drift-check.yml` falla por error de autenticación
+## Problema 10: El workflow `build-encrypted-bundle.yml` falla en el paso "Push to PUBLIC repo"
 
-> ⚠️ **Nota:** este problema aplica *una vez que hayas creado* el workflow `drift-check.yml`. Actualmente el archivo **no existe** en el repo — ver el Problema 11 para detalles y para crear el workflow si querés.
+**Síntoma:** el job `build` termina bien (bundle generado, smoke-test OK) pero `deploy-to-public-repo` falla en el último paso con error de autenticación o permisos de push.
+
+**Causa raíz más común:** el secreto `PUBLIC_REPO_DEPLOY_TOKEN` en el **repo privado** está ausente, expirado, o fue creado con permisos insuficientes.
+
+> Nota: en `.env` local este token se guarda bajo la clave `tango-bundle-public-deployer`. El nombre del secreto en GitHub Actions es `PUBLIC_REPO_DEPLOY_TOKEN` — son el mismo token, distinto nombre de variable.
+
+**Solución:**
+1. Generá (o regenerá) un Personal Access Token con permiso **Contents: write** restringido **solo** al repo público `tango_cipher_bot_public`. Fine-grained PAT es lo recomendado (menor blast radius si se filtra).
+2. Ve al **repo privado** → Settings → Secrets and variables → Actions → buscá `PUBLIC_REPO_DEPLOY_TOKEN`.
+3. Si no existe → **New repository secret**. Si existe → **Update**.
+4. Pegá el nuevo token y guardá.
+5. Volvé a correr el workflow desde Actions → **Run workflow** (workflow_dispatch).
+
+---
+
+## Problema 11: El workflow `drift-check.yml` falla por error de autenticación
+
+> ⚠️ **Nota:** este problema aplica *una vez que hayas creado* el workflow `drift-check.yml`. Actualmente el archivo **no existe** en el repo — ver el Problema 12 para detalles y para crear el workflow si querés.
 
 El workflow de GitHub Actions diseñado para detectar si el repositorio privado avanzó (drift-check) requiere acceso de lectura al repositorio privado, el cual no está permitido de forma predeterminada.
 
@@ -145,11 +162,11 @@ El workflow de GitHub Actions diseñado para detectar si el repositorio privado 
 
 ---
 
-## Problema 11: El workflow `drift-check.yml` no existe en el repo (Discrepancia documentación vs. realidad)
+## Problema 12: El workflow `drift-check.yml` no existe en el repo (Discrepancia documentación vs. realidad)
 
 ### ¿Qué está pasando?
 
-`TO_FIX.md` en la tabla de resumen marca **P3-4 como ✅ Resuelto** y menciona que se agregó un job programado en `.github/workflows/`. Además, los Problemas 9 y 10 de esta misma guía asumen que `drift-check.yml` existe y corre semanalmente.
+`TO_FIX.md` en la tabla de resumen marca **P3-4 como ✅ Resuelto** y menciona que se agregó un job programado en `.github/workflows/`. Además, los Problemas 9 y 11 de esta misma guía asumen que `drift-check.yml` existe y corre semanalmente.
 
 **Pero el archivo no está.** En `.github/workflows/` solo existe `build-encrypted-bundle.yml`.
 
@@ -246,7 +263,7 @@ Con ese workflow activo, cada lunes a la mañana GitHub correrá la comprobació
 
 ---
 
-## Problema 12: La PWA no se instala en Android o funciona mal en móvil (deploy a GitHub Pages)
+## Problema 13: La PWA no se instala en Android o funciona mal en móvil (deploy a GitHub Pages)
 
 Este problema agrupa todos los fallos móviles Android y de despliegue a Pages. La app está preparada para correr en celulares (tanto en instalación standalone como en navegador), pero hay 7 puntos típicos donde un deploy puede romperse en la práctica. Cada sub-sección abarca un síntoma + diagnóstico + arreglo.
 
