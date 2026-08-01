@@ -1,0 +1,42 @@
+name: Check PWA assets
+
+# Runs in the PUBLIC repo (where pwa/ actually lives). Wires
+# scripts/dev/check_pwa_assets.py into CI — its own docstring has said "wire
+# it into CI" since it was added, but nothing ever called it automatically.
+#
+# Catches, before merge instead of after a broken deploy:
+#   - a manifest.json / index.html / service-worker.js reference pointing
+#     at a font/icon/file that doesn't exist on disk (FORWARD check)
+#   - a font or icon file sitting in pwa/fonts or pwa/icons that nothing
+#     actually references, i.e. dead weight shipped to GitHub Pages for
+#     no reason (REVERSE check)
+#
+# No dependencies to install: the script only uses the stdlib
+# (json, re, sys, pathlib).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pwa/**"
+      - "scripts/dev/check_pwa_assets.py"
+  pull_request:
+    paths:
+      - "pwa/**"
+      - "scripts/dev/check_pwa_assets.py"
+  workflow_dispatch: {}
+
+jobs:
+  check-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2 # v5.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Run bidirectional PWA asset check
+        run: python3 scripts/dev/check_pwa_assets.py

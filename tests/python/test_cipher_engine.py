@@ -2,7 +2,7 @@ import os
 import sys
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from private_core.cipher_engine import cifrar_mensaje, descifrar_mensaje, iter_tangos, DEFAULT_SALT
 
 # Corpus mínimo autocontenido — sin dependencia de tangos.json en disco
@@ -222,3 +222,46 @@ def test_cifrar_rechaza_clave_de_metadata():
     base_con_metadata["_nota"] = "esto no es un tango"
     with pytest.raises(ValueError):
         cifrar_mensaje("_nota", "hola", base_con_metadata)
+
+
+# ---------- shared cross-engine vectors (P3-6) ----------
+
+import json
+from pathlib import Path
+
+_VECTORS = json.loads((Path(__file__).parent.parent / "vectors.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("case", _VECTORS["cases"], ids=lambda c: c["name"])
+def test_shared_vector(case):
+    """Assert Python engine agrees with tests/vectors.json (generated from JS engine).
+
+    Deterministic cases: exact ciphertext match.
+    roundtrip_only cases: encrypt→decrypt must reproduce the original message.
+    error cases: cifrar_mensaje must raise ValueError.
+    """
+    corpus = _VECTORS["corpus"]
+    salt = _VECTORS["salt"]
+
+    if case.get("error"):
+        with pytest.raises(ValueError):
+            cifrar_mensaje(case["id_tango"], case["mensaje"], corpus, salt=salt)
+        return
+
+    cifrado = cifrar_mensaje(case["id_tango"], case["mensaje"], corpus, salt=salt)
+
+    if case.get("roundtrip_only"):
+        resultado = descifrar_mensaje(cifrado, corpus, salt=salt)
+        assert resultado == case["mensaje"], (
+            f"Round-trip failed for vector '{case['name']}': "
+            f"encrypt produced {cifrado!r}, decrypt produced {resultado!r}, "
+            f"expected {case['mensaje']!r}"
+        )
+        return
+
+    assert cifrado == case["ciphertext"], (
+        f"Python cifrar_mensaje diverged from tests/vectors.json for "
+        f"'{case['name']}': got {cifrado!r}, expected {case['ciphertext']!r}. "
+        "If the wire format changed intentionally, regenerate vectors.json and "
+        "update pwa/cipherEngine.js in the same commit."
+    )

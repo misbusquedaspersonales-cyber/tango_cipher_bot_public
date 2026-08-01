@@ -34,7 +34,7 @@ import re
 import sys
 from pathlib import Path
 
-PWA_DIR = Path(__file__).resolve().parent.parent / "pwa"
+PWA_DIR = Path(__file__).resolve().parent.parent.parent / "pwa"
 
 KNOWN_LICENSE_SUFFIXES = ("-OFL.txt", "-OFL.md", "-LICENSE.txt", "-LICENSE.md", "OFL.txt", "LICENSE.txt")
 

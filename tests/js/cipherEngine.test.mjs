@@ -1,7 +1,7 @@
-// Run with: node --test tests/cipherEngine.test.mjs
+// Run with: node --test tests/js/cipherEngine.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cifrarMensaje, descifrarMensaje } from '../pwa/cipherEngine.js';
+import { cifrarMensaje, descifrarMensaje } from '../../pwa/cipherEngine.js';
 
 const BASE = {
     "3": {
@@ -93,3 +93,47 @@ test('descifrar: índice de palabra fuera de rango lanza error', async () => {
 test('descifrar: clave enmascarada inválida lanza error', async () => {
     await assert.rejects(() => descifrarMensaje('999-V01P01', BASE, SALT), /inválida/);
 });
+
+// ---------- shared cross-engine vectors (P3-6) ----------
+
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const VECTORS = JSON.parse(readFileSync(path.join(__dirname, '..', 'vectors.json'), 'utf-8'));
+
+for (const c of VECTORS.cases) {
+    test(`shared vector: ${c.name}`, async () => {
+        const { corpus, salt } = VECTORS;
+
+        if (c.error) {
+            await assert.rejects(
+                () => cifrarMensaje(c.id_tango, c.mensaje, corpus, salt),
+                undefined,
+                `Expected cifrarMensaje to reject for vector '${c.name}'`
+            );
+            return;
+        }
+
+        const cifrado = await cifrarMensaje(c.id_tango, c.mensaje, corpus, salt);
+
+        if (c.roundtrip_only) {
+            const resultado = await descifrarMensaje(cifrado, corpus, salt);
+            assert.equal(
+                resultado, c.mensaje,
+                `Round-trip failed for vector '${c.name}': ` +
+                `encrypt→'${cifrado}', decrypt→'${resultado}', expected '${c.mensaje}'`
+            );
+            return;
+        }
+
+        assert.equal(
+            cifrado, c.ciphertext,
+            `JS cifrarMensaje diverged from tests/vectors.json for '${c.name}': ` +
+            `got '${cifrado}', expected '${c.ciphertext}'. ` +
+            `If the wire format changed intentionally, regenerate vectors.json and ` +
+            `update private_core/cipher_engine.py in the same commit.`
+        );
+    });
+}

@@ -1,5 +1,67 @@
 # CHANGELOG
 
+## [Unreleased] - 2026-08-01 (session 2)
+
+### Added
+- `src/tango_cifrado/` — new Python package (P4-1):
+  - `corpus.py` — sole adapter over `private_core.cipher_engine`; the only file in the public repo that imports from the vendored private dependency. All other Python code imports from here.
+  - `telegram.py` — Telegram delivery implementation moved from root `telegram_client.py`.
+  - `cli.py` — interactive CLI logic moved from root `main.py`.
+  - `__init__.py` — package marker.
+- `tests/vectors.json` — 11 shared golden test vectors for cross-engine consistency (P3-6): 6 deterministic ciphertext cases, 3 `roundtrip_only` (non-deterministic fallback/digits), 2 `error` (invalid tango ID, metadata key). Uses the `BASE` fixture corpus already in `test_cipher_engine.py` — no dependency on `private_core/tangos.json`, safe to commit in the public repo.
+- `.github/workflows/vector-drift-guard.yml` — CI guard on PRs that touch `tests/vectors.json`: warns if `pwa/cipherEngine.js` wasn't also changed, flagging the pattern of hand-editing vectors to match a drifted engine without fixing the engine itself. Also runs `npm test` on every such PR.
+
+### Changed
+- `main.py` — reduced to a thin shim: `sys.path` setup + `from tango_cifrado.cli import main`.
+- `telegram_client.py` — reduced to a thin re-export shim from `tango_cifrado.telegram`; `requests` still imported at module level so `patch("telegram_client.requests.post", ...)` remains valid for any callers outside the test suite.
+- `tests/python/test_telegram_client.py` — `patch` targets updated from `telegram_client.requests.post` to `tango_cifrado.telegram.requests.post` (where `requests.post` is actually called after P4-1).
+- `tests/js/cipherEngine.test.mjs` — 11 new `shared vector: *` tests added via vector loop reading `tests/vectors.json`. Total JS tests: 30 (was 19).
+- `tests/python/test_cipher_engine.py` — `test_shared_vector` parametrized loop appended, reading `tests/vectors.json` via `Path(__file__).parent.parent / "vectors.json"`.
+- **P4-3**: test files reorganised into `tests/js/` and `tests/python/` (subfolder named `python` not `py` — `py` is a reserved pytest package name):
+  - JS import paths fixed: `../pwa/` → `../../pwa/` in both test files.
+  - Python `sys.path` fixed: project root `../..`, CI scripts path `../../scripts/ci`.
+  - `package.json` test script: `node --test tests/js/*.test.mjs`.
+  - Updated: `README.md`, `TROUBLESHOOTING.md`, `ROADMAP.md`, `drift-check.yml`.
+- **P4-4**: scripts reorganised into `scripts/ci/` and `scripts/dev/`:
+  - `scripts/ci/`: `build_encrypted_bundle.py`, `decrypt_bundle_cli.py`.
+  - `scripts/dev/`: `check_pwa_assets.py`, `setup_private_core.sh`.
+  - Path references fixed inside moved files: `../../private_core` fallback in build script; `parent.parent.parent / "pwa"` in check_pwa_assets.
+  - Updated: `build-encrypted-bundle.yml`, `check-pwa-assets.yml`, `drift-check.yml`, `README.md`, `PASOS_PROYECTO_CIFRADO_TANGOS.md`, `ROADMAP.md`, `TROUBLESHOOTING.md`.
+
+### Tests
+- `python3 -m pytest tests/python/test_build_encrypted_bundle.py tests/python/test_telegram_client.py -q` → **13/13 passed**.
+- `/path/to/node --test tests/js/*.test.mjs` → **30/30 passed** (19 original + 11 shared vectors).
+- `python3 scripts/dev/check_pwa_assets.py` → **OK**.
+
+---
+
+## [Unreleased] - 2026-08-01
+
+### Added
+- `.github/workflows/check-pwa-assets.yml` — nuevo workflow de CI que ejecuta `scripts/check_pwa_assets.py` automáticamente en cada push/PR que toque `pwa/**` o el propio script. Cierra el gap que el docstring del script documentaba desde su creación ("wire it into CI"): antes del merge en vez de después de un deploy roto. Sin dependencias de instalación (solo stdlib Python).
+
+### Fixed
+- **`npm test` fallaba en Node v22+ con "Cannot find module"** (F-1) — `package.json` `test` script cambiado de `"node --test tests/"` (forma bare-directory, no confiable entre versiones de Node) a `"node --test tests/*.test.mjs"` (glob explícito). Agregado `"engines": {"node": ">=20.0.0"}` para que versiones incompatibles fallen con advertencia clara de `npm` en lugar de errores de runtime crípticos.
+- **Setup de README no instalaba `pytest`** (F-2) — la línea `pip install requests python-dotenv cryptography` omitía `pytest`, inmediatamente seguida de instrucciones para correr `python3 -m pytest`. Clonado fresco → `ModuleNotFoundError`. Agregado `pytest` a la línea de instalación.
+- **`.env.example` con variable inválida e incompleta** (F-3) — `tango-bundle-public-deployer=...` usaba guiones (no válidos en nombres de variables POSIX) y no coincidía con el nombre real del secreto de GitHub Actions (`PUBLIC_REPO_DEPLOY_TOKEN` en `build-encrypted-bundle.yml`). Renombrada correctamente. Agregada `PRIVATE_REPO_PAT` (requerida por `drift-check.yml`), ausente del archivo hasta ahora, con comentario indicando en qué repo y workflow se usa cada una.
+
+### Changed
+- `README.md` — conteo de tests corregido de 78 a 64 (45 Python + 19 JS). Aclaración de que los 32 tests de `tests/test_cipher_engine.py` solo corren una vez que `private_core/` fue poblado con `scripts/setup_private_core.sh`.
+- `TO_FIX.md` — reestructurado completamente: eliminadas todas las entradas resueltas (P0 a P3-4, P3-6). Conservadas: P3-5 (expansión de corpus, pendiente) y los nuevos P4-1 a P4-4 (refactors de estructura sugeridos en revisión 2026-08-01). Agregada sección "Follow-up Review (2026-08-01)" con F-1 a F-4 marcados resueltos y F-5 abierto.
+- `TO_FIX.md` — nueva tarea abierta **F-5**: `scripts/check_coverage.py` y `tests/test_check_coverage.py` están referenciados en `CHANGELOG.md` pero no existen en el repo. Solo queda bytecode `.pyc` en `__pycache__/`. No se reconstruyó desde bytecode por riesgo de divergencia silenciosa. Recomendación: restaurar desde historial git o repo privado, o eliminar la referencia en `CHANGELOG.md`.
+- `TO_FIX.md` — nuevas tareas de refactor **P4-1 a P4-4** (sugeridas en revisión de arquitectura 2026-08-01, sin bugs, sin urgencia):
+  - **P4-1**: crear `corpus.py` como único punto de importación de `private_core.cipher_engine`, desacoplando el resto del código Python del vendored path.
+  - **P4-2**: dividir `pwa/app.js` en capas `core/` (sin DOM) y `ui/` (sin crypto) cuando el archivo supere las ~600 líneas.
+  - **P4-3**: separar tests en `tests/js/` y `tests/python/` para evitar contaminación entre runners.
+  - **P4-4**: separar `scripts/` en `scripts/ci/` y `scripts/dev/` según el contexto de ejecución.
+
+### Tests
+- `node --test tests/*.test.mjs` (vía `/root/.cache/ms-playwright-go/1.57.0/node` v24.11.1) → **19/19 passed**.
+- `python3 -m pytest tests/test_build_encrypted_bundle.py tests/test_telegram_client.py -v` → **13/13 passed**.
+- `python3 scripts/check_pwa_assets.py` → **OK** (forward + reverse asset check clean).
+
+---
+
 ## [Unreleased] - 2026-07-31
 
 ### Added

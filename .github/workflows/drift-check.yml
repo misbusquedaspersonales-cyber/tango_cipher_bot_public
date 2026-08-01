@@ -1,7 +1,7 @@
 name: Drift check — private repo vs. vendored SHA
 
 # Runs in the PUBLIC repo. Checks once a week whether the private repo's
-# HEAD has moved past the SHA pinned in scripts/setup_private_core.sh.
+# HEAD has moved past the SHA pinned in scripts/dev/setup_private_core.sh.
 # If it has, opens a GitHub Issue automatically so the maintainer doesn't
 # have to remember to diff manually.
 #
@@ -53,9 +53,9 @@ jobs:
       - name: Obtener SHA local pinneado en setup_private_core.sh
         id: local-sha
         run: |
-          LOCAL_SHA=$(grep -oP 'PRIVATE_CORE_COMMIT="\K[a-f0-9]{40}' scripts/setup_private_core.sh)
+          LOCAL_SHA=$(grep -oP 'PRIVATE_CORE_COMMIT="\K[a-f0-9]{40}' scripts/dev/setup_private_core.sh)
           if [ -z "$LOCAL_SHA" ]; then
-            echo "❌ ERROR: No se encontró PRIVATE_CORE_COMMIT en scripts/setup_private_core.sh"
+            echo "❌ ERROR: No se encontró PRIVATE_CORE_COMMIT en scripts/dev/setup_private_core.sh"
             exit 1
           fi
           echo "sha=$LOCAL_SHA" >> "$GITHUB_OUTPUT"
@@ -94,19 +94,19 @@ jobs:
               repo: context.repo.repo,
               title: `🔄 Drift detectado: private_core (${shortRemote}… vs ${shortLocal}…)`,
               body:
-                `El repositorio privado **tango_corpus_private** avanzó respecto al SHA pinneado en \\`scripts/setup_private_core.sh\\`.\n\n` +
+                `El repositorio privado **tango_corpus_private** avanzó respecto al SHA pinneado en \\`scripts/dev/setup_private_core.sh\\`.\n\n` +
                 `| Origen | SHA |\n` +
                 `|---|---|\n` +
                 `| 🔺 HEAD del repo privado (remoto) | \\`${remote}\\` |\n` +
                 `| 📍 SHA pinneado en \\`setup_private_core.sh\\` | \\`${local}\\` |\n\n` +
                 `**Qué hacer:**\n` +
                 `1. Verificá los commits nuevos del privado para entender qué cambió (nuevos tangos, fixes de padding, parches en cipher_engine, etc.).\n` +
-                `2. Editá \\`scripts/setup_private_core.sh\\` y cambiá \\`PRIVATE_CORE_COMMIT\\` al SHA nuevo.\n` +
+                `2. Editá \\`scripts/dev/setup_private_core.sh\\` y cambiá \\`PRIVATE_CORE_COMMIT\\` al SHA nuevo.\n` +
                 `3. Localmente actualizá tu entorno vendored:\n` +
                 `   \\`\\`\\`bash\n` +
                 `   rm -rf private_core\n` +
-                `   ./scripts/setup_private_core.sh\n` +
-                `   python3 -m pytest tests/ -v\n` +
+                `   ./scripts/dev/setup_private_core.sh\n` +
+                `   python3 -m pytest tests/python/ -v\n` +
                 `   npm test\n` +
                 `   \\`\\`\\`\n` +
                 `4. Commit y PR con el cambio de SHA.\n\n` +

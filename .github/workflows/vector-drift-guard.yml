@@ -1,0 +1,59 @@
+name: Vector drift guard
+
+# Warns when tests/vectors.json changes in a PR without a corresponding
+# change to at least one cipher engine file — the pattern that would indicate
+# someone hand-edited the vectors to match a drifted engine output rather than
+# fixing the engine itself.
+#
+# NOTE: private_core/cipher_engine.py is vendored/gitignored in this public
+# repo, so it won't appear in PR diffs here. Run the Python vector tests
+# (tests/python/test_cipher_engine.py) inside the private repo's CI where
+# both files are visible. This guard covers the JS engine side.
+
+on:
+  pull_request:
+    paths:
+      - "tests/vectors.json"
+      - "pwa/cipherEngine.js"
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Warn if vectors.json changed without cipherEngine.js
+        run: |
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          echo "Changed files:"
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -q "tests/vectors.json"; then
+            echo "$CHANGED" | grep -q "pwa/cipherEngine.js" || {
+              echo ""
+              echo "⚠️  tests/vectors.json changed but pwa/cipherEngine.js did not."
+              echo "   This is fine if you're adding new test cases that don't"
+              echo "   require an engine change. But if a vector's expected"
+              echo "   ciphertext was edited to match changed engine output,"
+              echo "   update pwa/cipherEngine.js (and private_core/cipher_engine.py"
+              echo "   in the private repo) in the same PR."
+              echo ""
+              echo "   Exiting with error to prompt review. If this change is"
+              echo "   intentional (new corpus-only test case), add a comment"
+              echo "   in the PR explaining why no engine change is needed."
+              exit 1
+            }
+          fi
+          echo "✅ Vector drift check passed."
+
+      - name: Run JS vector tests
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+
+      - name: Install deps and run JS tests
+        run: |
+          npm install
+          npm test

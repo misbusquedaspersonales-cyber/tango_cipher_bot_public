@@ -15,7 +15,7 @@ global.localStorage = {
 
 // Node 20 has globalThis.crypto.subtle and fetch.
 
-const basePath = new URL('../pwa/', import.meta.url);
+const basePath = new URL('../../pwa/', import.meta.url);
 
 const { unlockDeployBundle, savePayloadDirect, loadPayloadDirect, hasPayloadDirect } = await import(new URL('secure-vault.js', basePath));
 const { cifrarMensaje, descifrarMensaje } = await import(new URL('cipherEngine.js', basePath));

@@ -106,12 +106,12 @@ Características clave:
 
 ---
 
-### Paso 3: Script de Cifrado para Deploy (`scripts/build_encrypted_bundle.py`)
+### Paso 3: Script de Cifrado para Deploy (`scripts/ci/build_encrypted_bundle.py`)
 
 Corre en GitHub Actions — nunca en el browser. Produce `pwa/encrypted-bundle.json`.
 
 ```
-python3 scripts/build_encrypted_bundle.py \
+python3 scripts/ci/build_encrypted_bundle.py \
   --tangos tangos.json \
   --salt $CIFRADO_SALT \
   --out pwa/encrypted-bundle.json
@@ -121,29 +121,45 @@ Detalles criptográficos:
 - **Algoritmo:** AES-256-GCM
 - **KDF:** PBKDF2-HMAC-SHA256, 600 000 iteraciones, nonce y KDF salt aleatorios por cada build
 - **Output:** JSON con campos `kdf_salt_b64`, `nonce_b64`, `ciphertext_b64`, `aad`, `kdf_iterations`
-- **Verificación:** `scripts/decrypt_bundle_cli.py` como smoke-test en la misma Action
+- **Verificación:** `scripts/ci/decrypt_bundle_cli.py` como smoke-test en la misma Action
 
 ---
 
 ### Paso 4: Workflow de GitHub Actions (`.github/workflows/build-encrypted-bundle.yml`)
 
+El workflow del repo **privado** tiene dos jobs:
+
+**Job `build`** — genera el bundle y lo sube como artifact:
 ```yaml
 on:
   push:
     branches: [main]
     paths:
       - "tangos.json"
-      - "scripts/build_encrypted_bundle.py"
+      - "scripts/ci/build_encrypted_bundle.py"
 
 jobs:
   build:
     steps:
       - uses: actions/checkout@{SHA_PINNEADO}
       - run: pip install cryptography==46.0.6
-      - run: python3 scripts/build_encrypted_bundle.py --tangos tangos.json --salt 47 --out pwa/encrypted-bundle.json
+      - name: Required secrets guard   # falla explícitamente si falta CLAVE_DESPLIEGUE, CIFRADO_SALT o PUBLIC_REPO_DEPLOY_TOKEN
+        env:
+          HAS_CLAVE: ${{ secrets.CLAVE_DESPLIEGUE != '' }}
+          HAS_SALT:  ${{ secrets.CIFRADO_SALT != '' }}
+          HAS_PAT:   ${{ secrets.PUBLIC_REPO_DEPLOY_TOKEN != '' }}
+        run: |
+          test "$HAS_CLAVE" = true || { echo "❌ CLAVE_DESPLIEGUE missing"; exit 1; }
+          test "$HAS_SALT"  = true || { echo "❌ CIFRADO_SALT missing"; exit 1; }
+          test "$HAS_PAT"   = true || { echo "❌ PUBLIC_REPO_DEPLOY_TOKEN missing"; exit 1; }
+      - run: |
+          python3 scripts/ci/build_encrypted_bundle.py \
+            --tangos tangos.json \
+            --salt ${{ secrets.CIFRADO_SALT }} \
+            --out pwa/encrypted-bundle.json
         env:
           CLAVE_DESPLIEGUE: ${{ secrets.CLAVE_DESPLIEGUE }}
-      - run: python3 scripts/decrypt_bundle_cli.py pwa/encrypted-bundle.json
+      - run: python3 scripts/ci/decrypt_bundle_cli.py pwa/encrypted-bundle.json
         env:
           CLAVE_DESPLIEGUE: ${{ secrets.CLAVE_DESPLIEGUE }}
       - uses: actions/upload-artifact@{SHA_PINNEADO}
@@ -152,7 +168,34 @@ jobs:
           path: pwa/encrypted-bundle.json
 ```
 
-> El push al repo público se hace **manualmente** por diseño — revisar el diff antes de publicar es la última línea de defensa si el formato del bundle o el KDF necesitan cambiar.
+**Job `deploy-to-public-repo`** — hace checkout del repo público, compara el SHA del bundle, y solo commitea + pushea si cambió (evita commits no-op):
+```yaml
+  deploy-to-public-repo:
+    needs: build
+    if: success()
+    steps:
+      - uses: actions/checkout@{SHA_PINNEADO}
+        with:
+          repository: misbusquedaspersonales-cyber/tango_cipher_bot_public
+          ref: main
+          token: ${{ secrets.PUBLIC_REPO_DEPLOY_TOKEN }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@{SHA_PINNEADO}
+        with:
+          name: encrypted-bundle
+          path: new-bundle
+      - name: Solo commitear si el bundle cambió
+        run: |
+          NEW_SHA=$(sha256sum new-bundle/encrypted-bundle.json | cut -c1-12)
+          OLD_SHA=$(sha256sum public-repo/pwa/encrypted-bundle.json 2>/dev/null | cut -c1-12 || echo "(missing)")
+          [ "$OLD_SHA" = "$NEW_SHA" ] && echo "📭 Sin cambios, skip." && exit 0
+          cp new-bundle/encrypted-bundle.json pwa/encrypted-bundle.json
+          git add pwa/encrypted-bundle.json
+          git commit -m "deploy(encrypted-bundle): $NEW_SHA"
+          git push origin main
+```
+
+> `CIFRADO_SALT` y `CLAVE_DESPLIEGUE` son secretos del **repo privado**. `PUBLIC_REPO_DEPLOY_TOKEN` también va en el repo privado — es un fine-grained PAT con `Contents: write` restringido únicamente al repo público.
 
 ---
 

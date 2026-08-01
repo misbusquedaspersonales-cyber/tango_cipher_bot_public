@@ -86,18 +86,19 @@ $ tango
 | Archivo / Carpeta | Descripción |
 |---|---|
 | `tangos.json` | Corpus de tangos. Versos de relleno técnico marcados con `"padding": true`. |
-| `cipher_engine.py` | Motor de cifrado Python: coordenadas, XOR hex, round-trip lossless, SALT por entorno. |
-| `cipherEngine.js` | Motor equivalente en JS para la PWA. |
-| `telegram_client.py` | Envío a Telegram con manejo de errores de red. |
-| `main.py` | CLI de pruebas: cifra un mensaje y lo envía a Telegram. |
+| `src/tango_cifrado/corpus.py` | Único adaptador sobre `private_core.cipher_engine` — el único archivo del repo público que importa del módulo vendored. Todos los demás módulos Python importan desde aquí. |
+| `src/tango_cifrado/telegram.py` | Implementación del envío a Telegram (movida desde `telegram_client.py`). |
+| `src/tango_cifrado/cli.py` | Lógica del CLI interactivo (movida desde `main.py`). |
+| `main.py` | Shim de entrada: ajusta `sys.path` y delega a `tango_cifrado.cli`. |
+| `telegram_client.py` | Shim de re-exportación: mantiene compatibilidad hacia atrás para tests y callers externos. |
 | `secure-vault.js` | Gestión de credenciales en el browser (Layer 1: bundle deploy, Layer 2: PIN opcional, flujo sin fricción por defecto). |
-| `scripts/build_encrypted_bundle.py` | Genera el bundle cifrado para deploy. Corre en CI, nunca en el browser. |
-| `scripts/decrypt_bundle_cli.py` | Smoke-test CLI para verificar el bundle antes de publicarlo. |
-| `scripts/setup_private_core.sh` | Configura el entorno local clonando el repo privado en un estado "vendored" (pinneado a un commit SHA). |
+| `scripts/ci/build_encrypted_bundle.py` | Genera el bundle cifrado para deploy. Corre en CI, nunca en el browser. |
+| `scripts/ci/decrypt_bundle_cli.py` | Smoke-test CLI para verificar el bundle antes de publicarlo. |
+| `scripts/dev/setup_private_core.sh` | Configura el entorno local clonando el repo privado en un estado "vendored" (pinneado a un commit SHA). |
 | `scripts/aliases/` | Comandos cortos de terminal: `tango` (abrir PWA), `tango-url` (copiar URL al clipboard), `tango-cli` (wrapper del CLI local). |
 | `.github/workflows/build-encrypted-bundle.yml` | GitHub Actions workflow de build (solo en el repo privado). |
 | `.github/workflows/drift-check.yml` | GitHub Actions workflow semanal: compara el `PRIVATE_CORE_COMMIT` pinneado contra el HEAD del repo privado y abre Issue automático si detecta drift. Requiere el secreto `PRIVATE_REPO_PAT`. |
-| `tests/` | 78 tests: 54 Python + 24 JS, cubriendo cifrado, round-trip, pipeline de bundle, errores de red, seguridad y cobertura. |
+| `tests/` | ~86 tests total once `private_core/` is populated: 30 JS (`tests/js/`) + 13 Python always-runnable (`tests/python/test_build_encrypted_bundle.py` + `test_telegram_client.py`) + 43 Python requiring `private_core/` (`test_cipher_engine.py`: 32 original + 11 shared vectors). Run `python3 -m pytest tests/python/ -v` and `npm test` separately. |
 
 ## Setup del CLI (desarrollo / pruebas)
 
@@ -110,7 +111,7 @@ git config core.hooksPath hooks
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install requests python-dotenv cryptography
+pip install requests python-dotenv cryptography pytest
 cp .env.example .env
 # editar .env con tu TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID
 # ver TROUBLESHOOTING.md si no tienes el CHAT_ID
@@ -141,12 +142,12 @@ El script solicita la clave del tango (número del 1 al 7) y el mensaje. Cifra, 
 ## Correr los tests
 
 ```bash
-python3 -m pytest tests/ -v
+python3 -m pytest tests/python/ -v
 ```
 
 ### Verificar integridad de assets de la PWA
 
-`scripts/check_pwa_assets.py` valida en dos direcciones cualquier cambio en `pwa/`:
+`scripts/dev/check_pwa_assets.py` valida en dos direcciones cualquier cambio en `pwa/`:
 
 1. **FORWARD** — toda referencia en `manifest.json` (íconos), `index.html` (`@font-face`, `<link>`, `<img src>`) y `service-worker.js` (`SHELL_FILES`) apunta a un archivo que realmente existe en disco.
 2. **REVERSE** — todo `.ttf`/`.png` dentro de `pwa/fonts/` y `pwa/icons/` está referenciado por al menos uno de esos tres archivos (evita publicar fonts/icons muertos que nadie usa pero se siguen subiendo a GitHub Pages).
@@ -154,7 +155,7 @@ python3 -m pytest tests/ -v
 Correrlo antes de cualquier PR que toque `pwa/`:
 
 ```bash
-python3 scripts/check_pwa_assets.py
+python3 scripts/dev/check_pwa_assets.py
 ```
 
 ### Probar la PWA instalada en un celular real
@@ -178,3 +179,5 @@ Para que los pipelines funcionen correctamente, el repositorio público debe ten
 | `CLAVE_DESPLIEGUE` | Obligatorio — **repo privado** (`build-encrypted-bundle.yml`) | Contraseña maestra de alta entropía para AES-256-GCM que desencripta el corpus y el SALT en la PWA. Usá `openssl rand -base64 32`, no una frase memorizable. |
 | `PUBLIC_REPO_DEPLOY_TOKEN` | Obligatorio — **repo privado** (`build-encrypted-bundle.yml`, job `deploy-to-public-repo`) | Personal Access Token con permiso **Contents: write** sobre el repo público (`tango_cipher_bot_public`). El job lo usa para hacer push del bundle cifrado hacia el repo público después de cada build. En `.env` local este token se guarda bajo la clave `tango-bundle-public-deployer`. |
 | `PRIVATE_REPO_PAT` | Obligatorio — **repo público** (`drift-check.yml`) | Personal Access Token con permisos de **lectura** sobre el repo privado (`tango_corpus_private`). Sin este secreto el workflow semanal no puede consultar el SHA remoto y falla. Se configura en el **repo público** (donde corre `drift-check.yml`), no en el privado. |
+
+> ⚠️ Importante: no embebas tokens en la URL remota de git (`https://<token>@github.com/...`). Esto puede exponer tu PAT en la configuración local. Usa una URL limpia y un helper de credenciales en su lugar. Ver `TROUBLESHOOTING.md` para más detalles sobre este problema.

@@ -7,12 +7,12 @@
 - [x] `main.py` — CLI interactivo, delega HTTP a `telegram_client`, errores de crypto capturados
 - [x] Credenciales gestionadas via `.env` con `python-dotenv`
 - [x] `.env.example`, `.gitignore`, `TROUBLESHOOTING.md`, `CHANGELOG.md`, `README.md`, `ROADMAP.md`
-- [x] Suite de tests: 78 tests cubriendo cifrado, descifrado, round-trip, dígitos, SALT por entorno, `iter_tangos`, pipeline de bundle, errores de red, bóveda de seguridad y cobertura.
+- [x] Suite de tests: 64 tests cubriendo cifrado, descifrado, round-trip, dígitos, SALT por entorno, `iter_tangos`, pipeline de bundle, errores de red y bóveda de seguridad. (45 Python + 19 JS; los 32 tests de `test_cipher_engine.py` requieren `private_core/` poblado vía `scripts/dev/setup_private_core.sh`.)
 
 ## Fase 2: Ampliación del Corpus 🔄 En progreso
 - [x] Ampliar `tangos.json` de 2 a 7 tangos (versos auténticos + padding técnico marcado con `"padding": true`)
 - [ ] Continuar agregando tangos hasta cubrir vocabulario español común (~20+ tangos)
-- [x] Script utilitario para verificar cobertura de palabras contra un texto de prueba
+- [?] Script utilitario para verificar cobertura de palabras contra un texto de prueba — `scripts/check_coverage.py` y `tests/test_check_coverage.py` están referenciados en el CHANGELOG pero los archivos fuente no existen en el repo; solo queda bytecode `.pyc`. Ver `TO_FIX.md` F-5.
 
 ## Fase 3: Arquitectura de Doble Repositorio ✅ Pipeline implementado
 La base de datos (`tangos.json`) y el `SALT` nunca se exponen en el repo público.
@@ -28,8 +28,8 @@ El pipeline de despliegue los cifra antes de publicar.
 - [x] Crear repo privado con el código fuente — ej: `tangos-cipher-source`
 - [x] Crear repo público vacío para GitHub Pages — ej: `tangos-cipher-pwa`
   > Ambos repos deben compartir el mismo prefijo (ej: `tangos-`) para aparecer juntos en la lista de repositorios de GitHub.
-- [x] `scripts/build_encrypted_bundle.py` — cifra `tangos.json` + SALT con AES-256-GCM
-- [x] `scripts/decrypt_bundle_cli.py` — smoke-test CLI para verificar el bundle antes del deploy
+- [x] `scripts/ci/build_encrypted_bundle.py` — cifra `tangos.json` + SALT con AES-256-GCM
+- [x] `scripts/ci/decrypt_bundle_cli.py` — smoke-test CLI para verificar el bundle antes del deploy
 - [x] `.github/workflows/build-encrypted-bundle.yml` — GitHub Action que genera el bundle en cada push
 
 ## Fase 4: Motor JavaScript (`cipherEngine.js`) ✅ Completado
@@ -40,7 +40,7 @@ El pipeline de despliegue los cifra antes de publicar.
 - [x] Tokenización Unicode correcta con `/\p{L}+/gu` (fix bug ASCII-only de `\w`)
 - [x] Dígitos agrupados como un único token `#hex` en vez de uno por carácter
 - [x] Soporte de versos `padding` en formato `{padding: true, palabras: [...]}`
-- [x] Tests unitarios JS de round-trip cifrado/descifrado (`tests/cipherEngine.test.mjs`, 15 tests)
+- [x] Tests unitarios JS de round-trip cifrado/descifrado (`tests/js/cipherEngine.test.mjs`, 15 tests)
 
 ## Fase 5: PWA — Interfaz y Almacenamiento Local ✅ Completado
 - [x] `secure-vault.js` — gestión de credenciales en el browser con dos capas:

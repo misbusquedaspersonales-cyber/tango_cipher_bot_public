@@ -1,5 +1,5 @@
 # Local clone of the private repo (cipher_engine.py + tangos.json).
-# Populated by scripts/setup_private_core.sh — NEVER committed.
+# Populated by scripts/dev/setup_private_core.sh — NEVER committed.
 # This is the whole point of the split: if this line is ever removed
 # or this folder ever gets force-added, the secret corpus goes public.
 private_core/

@@ -4,7 +4,7 @@ import sys
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts", "ci"))
 
 from build_encrypted_bundle import construir_bundle  # noqa: E402
 from decrypt_bundle_cli import descifrar_bundle  # noqa: E402

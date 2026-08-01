@@ -86,7 +86,7 @@ def resolver_ruta_tangos(tangos_path: str) -> str:
     if os.path.exists(tangos_path):
         return tangos_path
 
-    fallback = os.path.join(os.path.dirname(__file__), "..", "private_core", "tangos.json")
+    fallback = os.path.join(os.path.dirname(__file__), "..", "..", "private_core", "tangos.json")
     if os.path.exists(fallback):
         return fallback
 

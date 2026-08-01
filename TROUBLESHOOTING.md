@@ -114,6 +114,25 @@ El despliegue en GitHub Pages puede tardar un par de minutos después de realiza
 
 ---
 
+## Problema 8.1: La URL remota de git tiene un token embebido
+
+La URL de `origin` no debe contener un PAT en texto claro como `https://<token>@github.com/...`. Este token puede quedar expuesto en la configuración local de git, en respaldos o en cualquier salida de `git remote -v`.
+
+**Síntoma:** `git remote -v` muestra un URL con un token embebido en lugar de una URL limpia.
+
+**Solución:**
+1. Reemplaza la URL remota por una versión limpia:
+   ```bash
+git remote set-url origin https://github.com/misbusquedaspersonales-cyber/tango_cipher_bot_public.git
+```
+2. Verifica que quedó limpia:
+   ```bash
+git remote get-url origin
+```
+3. No guardes tokens en la URL remota. Usa un helper de credenciales o variables/Secrets de GitHub Actions.
+
+---
+
 ## Problema 9: El repo privado y el repo público no están sincronizados (Drift)
 
 Este proyecto usa un modelo de dos repos para separar lo sensible de lo público:
@@ -122,9 +141,9 @@ Este proyecto usa un modelo de dos repos para separar lo sensible de lo público
 
 Si el repositorio privado avanza con nuevos tangos o correcciones y este repositorio público no se actualiza (lo que se conoce como *drift*), el modelo prevé una verificación automática mediante un workflow `drift-check.yml` que correría semanalmente y abriría un **GitHub Issue** si detecta que `PRIVATE_CORE_COMMIT` ha quedado viejo.
 
-> ⚠️ **Nota importante:** en este momento el workflow `drift-check.yml` **no existe físicamente en el repo** (está documentado como resuelto en TO_FIX.md P3-4 y el Problema 11 de esta guía explica la discrepancia). Hasta que se cree, no habrá alertas automáticas y la comprobación debe hacerse **manualmente** siguiendo los pasos del Problema 11.
+> El workflow `drift-check.yml` corre automáticamente cada lunes. Si el secreto `PRIVATE_REPO_PAT` no está configurado en este repo público, el workflow fallará — ver Problema 11 para crearlo.
 
-Cuando detectes drift (por alerta automática o por comprobación manual), deberás buscar el nuevo SHA en el repositorio privado, actualizar la variable `PRIVATE_CORE_COMMIT` en `scripts/setup_private_core.sh`, y correr el script localmente para sincronizar tu entorno (detalle paso a paso en Problema 11).
+Cuando detectes drift (por alerta automática o por comprobación manual), deberás buscar el nuevo SHA en el repositorio privado, actualizar la variable `PRIVATE_CORE_COMMIT` en `scripts/dev/setup_private_core.sh`, y correr el script localmente para sincronizar tu entorno (detalle paso a paso en Problema 11).
 
 ---
 
@@ -134,7 +153,7 @@ Cuando detectes drift (por alerta automática o por comprobación manual), deber
 
 **Causa raíz más común:** el secreto `PUBLIC_REPO_DEPLOY_TOKEN` en el **repo privado** está ausente, expirado, o fue creado con permisos insuficientes.
 
-> Nota: en `.env` local este token se guarda bajo la clave `tango-bundle-public-deployer`. El nombre del secreto en GitHub Actions es `PUBLIC_REPO_DEPLOY_TOKEN` — son el mismo token, distinto nombre de variable.
+> Nota: en `.env` local este token se guarda bajo la clave `PUBLIC_REPO_DEPLOY_TOKEN`, que es también el nombre del secreto en GitHub Actions.
 
 **Solución:**
 1. Generá (o regenerá) un Personal Access Token con permiso **Contents: write** restringido **solo** al repo público `tango_cipher_bot_public`. Fine-grained PAT es lo recomendado (menor blast radius si se filtra).
@@ -146,8 +165,6 @@ Cuando detectes drift (por alerta automática o por comprobación manual), deber
 ---
 
 ## Problema 11: El workflow `drift-check.yml` falla por error de autenticación
-
-> ⚠️ **Nota:** este problema aplica *una vez que hayas creado* el workflow `drift-check.yml`. Actualmente el archivo **no existe** en el repo — ver el Problema 12 para detalles y para crear el workflow si querés.
 
 El workflow de GitHub Actions diseñado para detectar si el repositorio privado avanzó (drift-check) requiere acceso de lectura al repositorio privado, el cual no está permitido de forma predeterminada.
 
@@ -162,104 +179,11 @@ El workflow de GitHub Actions diseñado para detectar si el repositorio privado 
 
 ---
 
-## Problema 12: El workflow `drift-check.yml` no existe en el repo (Discrepancia documentación vs. realidad)
+## Problema 12: ~~El workflow `drift-check.yml` no existe en el repo~~ ✅ Resuelto
 
-### ¿Qué está pasando?
+`.github/workflows/drift-check.yml` existe y corre semanalmente (lunes 08:00 UTC). Si abrís un Issue etiquetado `drift` es que el workflow detectó que `PRIVATE_CORE_COMMIT` en `scripts/dev/setup_private_core.sh` quedó viejo respecto al HEAD del repo privado.
 
-`TO_FIX.md` en la tabla de resumen marca **P3-4 como ✅ Resuelto** y menciona que se agregó un job programado en `.github/workflows/`. Además, los Problemas 9 y 11 de esta misma guía asumen que `drift-check.yml` existe y corre semanalmente.
-
-**Pero el archivo no está.** En `.github/workflows/` solo existe `build-encrypted-bundle.yml`.
-
-Esto significa que **la comprobación automática de drift NO se está ejecutando**. Nadie recibirá un Issue de GitHub alertando que `PRIVATE_CORE_COMMIT` en `scripts/setup_private_core.sh:27` (actualmente `c14366ba53f679ecf1e747e62ca49f46ad5d2e04`) se desactualizó respecto al HEAD del repo privado.
-
-**Riesgo práctico:** si el repo privado agrega tangos nuevos, corrige padding verses, o parchea `cipher_engine.py`, este repo público seguirá apuntando a un SHA viejo sin que nadie lo note. Quienes corran `./scripts/setup_private_core.sh` obtendrán código y corpus desactualizados.
-
-### Cómo verificar el drift MANUALMENTE (hasta que se implemente el workflow)
-
-Ejecutá esto en tu terminal (requiere `git` y acceso de lectura al repo privado):
-
-```bash
-# 1. Obtener el SHA del HEAD actual del repo privado
-git ls-remote https://github.com/misbusquedaspersonales-cyber/tango_corpus_private.git HEAD
-
-# 2. Comparar contra el SHA pinneado en el script
-grep PRIVATE_CORE_COMMIT scripts/setup_private_core.sh
-```
-
-Si los dos SHA son **distintos**, hay drift. Actualizá así:
-
-```bash
-# 1. Editar scripts/setup_private_core.sh y cambiar PRIVATE_CORE_COMMIT por el SHA nuevo
-# 2. Re-clonar private_core/ localmente:
-rm -rf private_core
-./scripts/setup_private_core.sh
-
-# 3. Correr los tests para confirmar que nada se rompió con la nueva versión
-python3 -m pytest tests/ -v
-npm test
-```
-
-### (Opcional) Crear `drift-check.yml` para recuperar la comprobación automática
-
-Si querés que la alerta automática exista como dice TO_FIX.md, creá `.github/workflows/drift-check.yml` con el siguiente contenido. Va a necesitar el secreto `PRIVATE_REPO_PAT` (creado igual que en el Problema 10) para leer el SHA remoto sin clonar todo el repo:
-
-```yaml
-name: Drift check — private repo vs. vendored SHA
-
-on:
-  schedule:
-    # Todos los lunes a las 08:00 UTC (05:00 ARG)
-    - cron: '0 8 * * 1'
-  workflow_dispatch: {}
-
-jobs:
-  drift-check:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Obtener SHA remoto del repo privado
-        id: remote-sha
-        env:
-          PAT: ${{ secrets.PRIVATE_REPO_PAT }}
-        run: |
-          if [ -z "$PAT" ]; then
-            echo "❌ PRIVATE_REPO_PAT no está configurado. No se puede consultar el repo privado."
-            exit 1
-          fi
-          REMOTE_SHA=$(git ls-remote https://x-access-token:${PAT}@github.com/misbusquedaspersonales-cyber/tango_corpus_private.git HEAD | awk '{print $1}')
-          echo "sha=$REMOTE_SHA" >> "$GITHUB_OUTPUT"
-          echo "SHA remoto: $REMOTE_SHA"
-
-      - name: Obtener SHA local pinneado en setup_private_core.sh
-        id: local-sha
-        run: |
-          LOCAL_SHA=$(grep -oP 'PRIVATE_CORE_COMMIT="\K[a-f0-9]+' scripts/setup_private_core.sh)
-          echo "sha=$LOCAL_SHA" >> "$GITHUB_OUTPUT"
-          echo "SHA local pinneado: $LOCAL_SHA"
-
-      - name: Comparar y abrir Issue si hay drift
-        if: steps.remote-sha.outputs.sha != steps.local-sha.outputs.sha
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
-        with:
-          script: |
-            const remote = "${{ steps.remote-sha.outputs.sha }}";
-            const local = "${{ steps.local-sha.outputs.sha }}";
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: "🔄 Drift detectado: private_core SHA desactualizado",
-              body: `El repositorio privado avanzó respecto al SHA pinneado en \`scripts/setup_private_core.sh\`.\n\n- SHA remoto (HEAD del privado): \`${remote}\`\n- SHA local (pinneado): \`${local}\`\n\n**Acción requerida:** actualizá \`PRIVATE_CORE_COMMIT\` en \`scripts/setup_private_core.sh\`, re-corré \`./scripts/setup_private_core.sh\` y validá los tests.`,
-              labels: ["drift", "maintenance"]
-            });
-
-      - name: Sin drift — reportar OK
-        if: steps.remote-sha.outputs.sha == steps.local-sha.outputs.sha
-        run: echo "✅ Sin drift — ambos SHA coinciden."
-```
-
-Con ese workflow activo, cada lunes a la mañana GitHub correrá la comprobación sola y, si el privado avanzó, abrirá un Issue automáticamente en este repo público (igual que lo describen TO_FIX.md P3-4 y el Problema 9 arriba).
+El workflow requiere el secreto `PRIVATE_REPO_PAT` en **este repo público** (Settings → Secrets and variables → Actions). Si el workflow falla con error de autenticación, ver **Problema 11** para crearlo. Si querés dispararlo manualmente sin esperar al lunes: Actions → "Drift check" → **Run workflow**.
 
 ---
 
@@ -392,11 +316,11 @@ git status --short index.html go.html pwa/go.html
 # → MAL: aparece ?? (untracked) → git add && git commit && push
 
 # 3) ¿Asset integrity (ninguna referencia rota en HTML/JS)?
-python3 scripts/check_pwa_assets.py
+python3 scripts/dev/check_pwa_assets.py
 # → OK: "todos los assets referenciados existen..."
 
 # 4) ¿Test suite pública pasa (13 Python + 19 JS)?
-python3 -m pytest tests/test_build_encrypted_bundle.py tests/test_telegram_client.py -q
+python3 -m pytest tests/python/test_build_encrypted_bundle.py tests/python/test_telegram_client.py -q
 npm test
 # → OK: 13 passed / 19 pass
 
