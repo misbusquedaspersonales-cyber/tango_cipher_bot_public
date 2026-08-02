@@ -149,3 +149,44 @@ Esto reduciría la fricción para el caso en que el usuario quiere mandar el tex
 **Por qué no se implementó todavía:** el flujo actual es intencionalmente lineal — fuerza el paso por Cifrar antes de poder enviar, lo que protege contra envíos accidentales de texto plano por Telegram. Cambiar esto requiere evaluar si el trade-off entre fricción y seguridad operacional vale la pena para el caso de uso real del proyecto.
 
 **Si se implementa:** los botones deben mostrar su estado actual en el label (ej: "Copiar mensaje" vs "Copiar cifrado") y deshabilitarse visualmente cuando no hay nada que copiar/enviar.
+
+## Fase 9: Distribución como APK Android (TWA) 📦 No implementado
+
+### Contexto
+
+Instalar la PWA en Android requiere que el usuario encuentre la opción "Instalar app" o "Agregar a pantalla de inicio" en el menú de Chrome — un paso confuso para usuarios no técnicos. Un APK descargable elimina esa fricción: el receptor lo instala como cualquier otra app Android (doble tap → Instalar), sin tocar el navegador.
+
+### Enfoque: Trusted Web Activity (TWA)
+
+Una TWA es un wrapper Android mínimo que muestra una URL en Chrome Custom Tabs con verificación de Digital Asset Links — sin barra de dirección, sin browser chrome, idéntico a una app nativa. El código de la PWA no cambia en absoluto.
+
+Ventajas para este proyecto:
+- El APK pesa ~2 MB (solo el wrapper, no una copia de la app)
+- Sigue apuntando a GitHub Pages — updates de la PWA llegan automáticamente sin resubir el APK
+- No requiere Google Play — se distribuye como sideload (archivo `.apk` directo)
+- Firma con una clave propia, sin dependencia de tiendas
+
+### Lo que hay que construir
+
+#### Fase 9.1 — APK básico con TWA
+- [ ] Crear proyecto Android mínimo con la dependencia `androidx.browser:browser` (CustomTabs/TWA).
+- [ ] Configurar `LauncherActivity` apuntando a `https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html`.
+- [ ] Generar `assetlinks.json` y publicarlo en `pwa/.well-known/assetlinks.json` en GitHub Pages (requerido por TWA para verificación de origen — sin esto el wrapper cae a Chrome con barra de URL visible).
+- [ ] Firmar el APK con una keystore propia (`keytool` + `apksigner`). Guardar la keystore de forma segura — perderla impide publicar updates.
+- [ ] Probar instalación por sideload: enviar el `.apk` por Telegram/WhatsApp/email → receptor activa "Instalar apps de fuentes desconocidas" → instala → ícono en Home Screen.
+
+#### Fase 9.2 — Icono, nombre y metadata Android
+- [ ] `AndroidManifest.xml`: nombre de app "Tango Cifrado", ícono adaptativo (usar los `icon-192.png` / `icon-maskable-512.png` ya existentes en `pwa/icons/`).
+- [ ] Splash screen con el color `#1a110f` (igual que la PWA) para evitar flash blanco al abrir.
+- [ ] `versionCode` / `versionName` sincronizados con el CHANGELOG para poder rastrear qué versión tiene cada dispositivo.
+
+#### Fase 9.3 — CI: APK generado automáticamente en cada release
+- [ ] GitHub Actions workflow en el repo privado o público que buildea el APK con Gradle y lo sube como release asset a GitHub Releases.
+- [ ] El receptor siempre descarga la última versión desde la URL del release — sin necesidad de reenviar el archivo manualmente.
+
+### Consideraciones
+
+- **`assetlinks.json`** es el paso más crítico y el más fácil de olvidar. Sin él la TWA muestra la URL en la barra — el receptor ve que es una web, no una app. Requiere el SHA-256 del certificado de firma del APK.
+- **Sideload en Android:** el receptor debe habilitar "Instalar apps de fuentes desconocidas" en Ajustes → Seguridad (o en Ajustes de la app desde donde abre el APK, dependiendo de la versión de Android). Es un paso de un solo click pero hay que instruirlo.
+- **iOS:** TWA es exclusiva de Android. Para iOS la única opción nativa sin App Store es la instalación PWA desde Safari (Compartir → Agregar a pantalla de inicio), que es más visible en Safari que en Chrome móvil. No hay equivalente a sideload en iOS.
+- **Updates:** como la TWA apunta a la URL de GitHub Pages, cualquier cambio en la PWA llega automáticamente sin resubir el APK. Solo hay que subir un APK nuevo cuando cambia el wrapper Android (nombre, ícono, permisos, versión mínima de Android).
