@@ -312,8 +312,11 @@ function setMode(newMode) {
         mode === "cifrar" ? "Escribí el mensaje…" : "Pegá el código cifrado (ej: 50-V09P01-~20-…)";
     $("#message-label").textContent = mode === "cifrar" ? "Mensaje" : "Código cifrado";
     $("#run-action").textContent = mode === "cifrar" ? "Cifrar" : "Descifrar";
+    $("#message-input").value = "";
     $("#output-strip").innerHTML = "";
     $("#send-row").hidden = true;
+    $("#send-row").dataset.cipherText = "";
+    setStatus($("#composer-status"), "", "info");
 }
 
 async function handleRunAction() {
