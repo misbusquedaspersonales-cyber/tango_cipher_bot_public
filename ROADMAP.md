@@ -96,61 +96,54 @@ Esto reduciría la fricción para el caso en que el usuario quiere mandar el tex
 
 ## Fase 8: Recepción de Mensajes (Circuito Completo) ❌ No implementado
 
-### Situación actual
+### Objetivo real
 
-El sistema implementa solo la mitad del circuito. Telegram es un canal de salida: el bot entrega el mensaje cifrado pero la PWA nunca lo lee de vuelta. El receptor tiene que abrir Telegram manualmente, copiar el código cifrado, abrir la PWA y pegarlo en el campo Descifrar.
+No es "replicar las notificaciones de Telegram" — Telegram ya las resuelve mejor de lo que este proyecto podría replicar gratis (push nativo, confiable, iOS y Android, cero infraestructura nueva). El problema real es el paso siguiente: **de "vi la notificación" a "el texto cifrado ya está en el campo Descifrar, listo para un click"**, sin copiar/pegar a mano y sin cambiar de app conscientemente.
 
-```
-Emisor (PWA)       Telegram             Receptor
-────────────────────────────────────────────────────────
-Cifrar + Enviar →→→ bot entrega   →→→  abre Telegram manualmente
-                                        copia el código
-                                        abre la PWA manualmente
-                                        pega en Descifrar
-                                        click Descifrar
-                                        lee el mensaje
-```
+### Por qué se descarta `getUpdates` (polling)
 
-### Lo que falta construir
+`getUpdates` solo devuelve mensajes que un humano le envió *al bot*. Nunca devuelve lo que el propio bot mandó via `sendMessage` — no es un límite de configuración, es que el Bot API no tiene ningún endpoint para leer el historial de mensajes salientes. Como "Enviar" usa `sendMessage`, lo que entrega es estructuralmente invisible para cualquier dispositivo que haga polling de `getUpdates`. El polling no funciona para este caso de uso.
 
-**1. Leer mensajes entrantes desde el bot (`getUpdates` o webhook)**
+### Diseño propuesto: deep link con botón inline
 
-La Bot API de Telegram tiene dos mecanismos para recibir mensajes enviados al bot:
+**Cómo funciona:**
 
-- **Polling (`getUpdates`)** — la PWA pregunta periódicamente `GET /bot{token}/getUpdates?offset=...`. Simple, sin infraestructura, funciona desde el browser directamente. La desventaja es latencia (el intervalo de polling) y que consume batería si se hace muy frecuente.
-- **Webhook** — Telegram hace un POST a una URL cuando llega un mensaje. Requiere un servidor HTTPS con IP pública. No aplica directamente a una PWA estática en GitHub Pages sin un backend intermedio.
+1. Al hacer "Cifrar + Enviar", además del texto cifrado, `sendMessage` adjunta un `inline_keyboard` con un botón tipo `url` que apunta a `pwa/index.html#c=<código-cifrado-urlencoded>`.
+2. El receptor ve la notificación nativa de Telegram. Toca el botón — no necesita copiar nada.
+3. Se abre la PWA. `app.js` lee `location.hash` al cargar, detecta `#c=...`, pone el mode en "Descifrar", pre-carga el textarea, y limpia el hash de la URL.
+4. El receptor hace click en "Descifrar".
 
-Para este proyecto (PWA estática, costo $0), el polling es el camino natural.
+**Por qué el fragmento (`#c=`) y no un query param (`?c=`):**
 
-**2. Auto-poblar el campo Descifrar**
+El fragmento nunca se envía al servidor en un request HTTP — no aparece en logs de acceso de GitHub Pages ni en `Referer`. Con GitHub Pages estático es defensa en profundidad más que necesidad estricta, pero es gratis y reduce superficie de exposición del texto cifrado.
 
-Cuando el polling detecta un mensaje nuevo que tiene el formato de un código cifrado (empieza con un número seguido de guión y tokens `V`/`#`/`~`), cargarlo automáticamente en el textarea de Descifrar para que el receptor solo tenga que hacer click en el botón.
+**Por qué un botón inline y no la URL pegada en el texto del mensaje:**
 
-**3. Notificación al receptor**
+Si la URL apareciera como texto plano, Telegram generaría una vista previa del link — sus servidores harían un fetch de esa URL, exponiendo el texto cifrado a la infraestructura de Telegram innecesariamente. Un botón `url` en un `inline_keyboard` no dispara preview: solo se resuelve cuando el usuario lo toca desde su propio cliente.
 
-- **Con la app abierta:** un badge o banner en la UI indicando "Mensaje nuevo".
-- **Con la app en segundo plano o cerrada:** el service worker puede mostrar una notificación push del sistema operativo via la Web Push API + Notifications API. Requiere que el usuario haya concedido permiso de notificaciones al instalar la PWA.
+**Problema de redirect a resolver primero:**
 
-### Diseño propuesto
+`index.html` y `go.html` redirigen a `pwa/index.html` con un `<meta http-equiv="refresh">` estático que no reenvía el fragmento. Dos opciones:
+- **Simple:** el deep link siempre apunta directo a `.../pwa/index.html#c=...`, nunca a la URL corta de raíz.
+- **Más robusto:** cambiar el redirect a JS (`location.replace('./pwa/index.html' + location.hash)`), así cualquier link corto también preserva el fragmento.
 
-```
-pwa/app.js
-  └── initInbox()
-        ├── pollTelegram() — getUpdates cada N segundos
-        ├── onMessageReceived(text) — detecta formato cifrado
-        │     ├── si es código cifrado → carga en textarea Descifrar
-        │     │   y muestra badge "Mensaje nuevo"
-        │     └── si es texto plano → ignora o muestra en log
-        └── showInboxNotification() — banner en UI o push notification
+### Consideraciones de seguridad
 
-pwa/service-worker.js
-  └── 'push' event handler — muestra notificación del SO si la app está cerrada
-```
+- **No auto-descifrar sin confirmación explícita.** Si el vault está bloqueado, el deep link pre-carga el campo y se detiene — el PIN sigue siendo el gate, igual que hoy. Si el vault ya está desbloqueado en la sesión, se puede ofrecer un botón "Descifrar ahora" prominente, pero seguir exigiendo el click, nunca auto-ejecutar.
+- El código cifrado quedará en el historial de navegación del dispositivo (URL con fragmento). Es la misma clase de exposición que ya existe hoy (mensaje en Telegram, `localStorage` del vault) — no es un nuevo tipo de riesgo, pero vale documentarlo.
+- Limpiar el fragmento con `history.replaceState` apenas se lee, para que no quede visible en la barra de direcciones ni se re-dispare al hacer refresh.
 
-### Consideraciones antes de implementar
+### Fases propuestas
 
-- **Un solo bot para dos usuarios:** el bot recibe mensajes de ambos lados. Hay que distinguir qué mensajes son "para mí" — lo más simple es filtrar por `from.id` o usar un chat compartido donde todos los mensajes son relevantes.
-- **`offset` de `getUpdates`:** hay que persistir el último `update_id` procesado (en `localStorage`) para no mostrar mensajes viejos cada vez que se abre la app.
-- **Intervalo de polling:** 5-10 segundos es razonable para una conversación humana. Menos de 3 segundos empieza a ser agresivo con la batería del móvil.
-- **Permisos de notificación:** la Web Push API requiere consentimiento explícito del usuario. Hay que pedirlo en un momento con contexto (no al arrancar la app en frío).
-- **El bot token queda expuesto en el browser:** ya ocurre hoy para enviar mensajes. No es nuevo, pero vale mencionarlo: cualquiera que inspeccione `localStorage` puede leer el token y hacer polling ellos también. La mitigación es el PIN de dispositivo (Layer 2 de `secure-vault.js`).
+#### Fase 8.1 — Deep link básico (sin infraestructura nueva)
+- [ ] `enviarATelegram()` en `app.js`: agregar `reply_markup` con `inline_keyboard` de un botón `url` → `pwa/index.html#c=<código>`.
+- [ ] `app.js` al iniciar: leer `location.hash`, detectar `c=`, cambiar a modo Descifrar, pre-cargar el textarea, limpiar el hash con `history.replaceState`.
+- [ ] Resolver el redirect de `index.html`/`go.html` para no perder el fragmento.
+- [ ] Test manual: enviar desde un dispositivo, tocar el botón desde la notificación de Telegram en el otro, confirmar que llega pre-cargado.
+
+#### Fase 8.2 — Pulido de UX
+- [ ] Manejo de error si el fragmento no es un código cifrado válido — mostrar el mismo mensaje de error que ya existe para input inválido, no un crash silencioso.
+- [ ] Si el vault ya está desbloqueado en esa sesión, ofrecer botón "Descifrar ahora" prominente.
+
+#### Fase 8.3 — Inbox real dentro de la PWA (opcional, solo si hay necesidad concreta)
+Si alguna vez se necesita ver mensajes recibidos dentro de la PWA sin depender de la notificación de Telegram, la única vía correcta es usar la API de cliente de Telegram (MTProto, vía una librería como GramJS) en vez del Bot API, para leer el chat como la cuenta real del receptor. Es sustancialmente más complejo y sensible en términos de seguridad (una sesión de usuario de Telegram es más poderosa que un token de bot). No implementar sin una razón concreta que Fase 8.1 no cubra.
