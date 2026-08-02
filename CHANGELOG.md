@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## [Unreleased] - 2026-08-01 (session 4)
+
+### Added
+- **Fase 7.1 — Deep link reception circuit** (`pwa/app.js`, `index.html`, `go.html`, `pwa/go.html`): closes the send/receive loop without polling or new infrastructure.
+  - `enviarATelegram()` now attaches a `reply_markup` `inline_keyboard` button ("Descifrar →") to every Telegram send. The button URL points to `pwa/index.html#c=<encodeURIComponent(ciphertext)>` derived from `location.origin+pathname` at send time, so it works on GitHub Pages and any local dev server. Using a button instead of a bare URL in the message text prevents Telegram's servers from fetching the URL (which would expose the ciphertext to Telegram's infrastructure via link preview).
+  - `consumeDeepLink()` — reads and immediately clears `location.hash` via `history.replaceState` so the ciphertext disappears from the address bar before any async vault work begins, and doesn't re-trigger on refresh. Returns the decoded ciphertext or `null` if the fragment isn't a `#c=` deep link.
+  - `applyDeepLinkIfPending()` — called from `enterComposer()` once the vault is open and the app-screen is visible: switches to Descifrar mode, pre-loads the textarea with the ciphertext, shows "Mensaje recibido — tocá Descifrar para leerlo." hint.
+  - `pendingDeepLink` moved from module-scope (parse-time) to the top of `init()` — same semantics (runs before any async work), but now testable without import-cache tricks.
+- **Redirect fragment forwarding** (`index.html`, `go.html`, `pwa/go.html`): previously the `<meta http-equiv="refresh">` fired before `<body>` scripts, silently dropping the `#c=` fragment. Fix: moved the redirect to a synchronous `<script>` in `<head>` that runs before any `<meta>` tag is processed; removed the now-redundant `<meta refresh>` from all three files. The `<noscript>` manual-link fallback covers the no-JS edge case.
+- `tests/js/deeplink.test.mjs` — 9 new tests covering: `consumeDeepLink` returning null on no fragment / unrelated fragment / malformed percent-encoding; decoding simple and special-character ciphertexts; calling `history.replaceState` to clear the hash; `reply_markup` payload shape (inline_keyboard present, button url contains encoded fragment, text field unchanged).
+
+### Changed
+- ROADMAP.md Fase 7.1 checkboxes marked `[x]`.
+
+### Tests
+- `node --test tests/js/*.test.mjs` → **39/39 passed** (was 30; +9 deep-link tests).
+- `python3 -m pytest tests/python/test_build_encrypted_bundle.py tests/python/test_telegram_client.py -q` → **13/13 passed**.
+- `python3 scripts/dev/check_pwa_assets.py` → **OK**.
+
+---
+
 ## [Unreleased] - 2026-08-01 (session 3)
 
 ### Fixed
