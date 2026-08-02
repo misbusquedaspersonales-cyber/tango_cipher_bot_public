@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## [Unreleased] - 2026-08-01 (session 3)
+
+### Fixed
+- **Send-row stays visible after erasing the message** (`pwa/app.js`) — clicking Cifrar then clearing the textarea left the Copiar and Enviar a Telegram buttons visible with stale ciphertext attached. Root cause: `#send-row` was only hidden at the top of `handleRunAction()`, so it never reset when the user erased text without clicking again. Fix: added an `input` listener on `#message-input` that hides `#send-row`, clears `dataset.cipherText`, wipes the output strip, and resets the status message whenever the textarea becomes empty.
+
+### Changed
+- **`build-encrypted-bundle.yml` `run:` paths reverted to private-repo layout** — the P4-4 restructure had updated `scripts/build_encrypted_bundle.py` → `scripts/ci/build_encrypted_bundle.py` in the workflow's `run:` and `paths:` triggers. That was wrong: the workflow runs in the private repo's CI checkout, where the scripts still live at the flat `scripts/` path. Reverted to `scripts/build_encrypted_bundle.py` and `scripts/decrypt_bundle_cli.py`. The `scripts/ci/` copies in this public repo are reference copies for local tests only.
+- `scripts/ci/build_encrypted_bundle.py` and `decrypt_bundle_cli.py` — docstrings updated with explicit warning that these are reference copies; the private repo's flat-path copies are what actually runs in production CI, and both must be kept in sync manually.
+- `PASOS_PROYECTO_CIFRADO_TANGOS.md` Paso 3 — added callout block clarifying which repo each copy lives in.
+- `README.md` file-overview table — rows for `scripts/ci/` files now state "reference copy for local tests, not what runs in CI".
+- `ROADMAP.md` — new **Fase 7** section documenting the unified-action-flow UX idea: Copiar/Enviar operating on raw message or ciphertext depending on current state, with the reasoning for why it wasn't implemented (intentional linear flow protects against accidental plaintext sends over Telegram).
+
+### Tests
+- `node --test tests/js/*.test.mjs` → **30/30 passed** (no regression from the `input` listener addition).
+
+---
+
 ## [Unreleased] - 2026-08-01 (session 2)
 
 ### Added
