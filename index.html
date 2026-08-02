@@ -91,10 +91,11 @@
       // Runs *after* meta refresh if JS is enabled; meta refresh gets there
       // first most of the time. location.replace() avoids adding this
       // redirect alias page to the browser history (Back button → clean).
+      // location.hash is forwarded so deep links (#c=...) survive the redirect.
       try {
-        window.location.replace("./pwa/index.html");
+        window.location.replace("./pwa/index.html" + location.hash);
       } catch (_) {
-        window.location.href = "./pwa/index.html";
+        window.location.href = "./pwa/index.html" + location.hash;
       }
     </script>
   </body>

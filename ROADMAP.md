@@ -116,10 +116,10 @@ Si la URL apareciera como texto plano, Telegram generaría una vista previa del 
 ### Fases propuestas
 
 #### Fase 7.1 — Deep link básico (sin infraestructura nueva)
-- [ ] `enviarATelegram()` en `app.js`: agregar `reply_markup` con `inline_keyboard` de un botón `url` → `pwa/index.html#c=<código>`.
-- [ ] `app.js` al iniciar: leer `location.hash`, detectar `c=`, cambiar a modo Descifrar, pre-cargar el textarea, limpiar el hash con `history.replaceState`.
-- [ ] Resolver el redirect de `index.html`/`go.html` para no perder el fragmento.
-- [ ] Test manual: enviar desde un dispositivo, tocar el botón desde la notificación de Telegram en el otro, confirmar que llega pre-cargado.
+- [x] `enviarATelegram()` en `app.js`: agregar `reply_markup` con `inline_keyboard` de un botón `url` → `pwa/index.html#c=<código>`.
+- [x] `app.js` al iniciar: leer `location.hash`, detectar `c=`, cambiar a modo Descifrar, pre-cargar el textarea, limpiar el hash con `history.replaceState`.
+- [x] Resolver el redirect de `index.html`/`go.html` para no perder el fragmento.
+- [x] Test manual: enviar desde un dispositivo, tocar el botón desde la notificación de Telegram en el otro, confirmar que llega pre-cargado.
 
 #### Fase 7.2 — Pulido de UX
 - [ ] Manejo de error si el fragmento no es un código cifrado válido — mostrar el mismo mensaje de error que ya existe para input inválido, no un crash silencioso.

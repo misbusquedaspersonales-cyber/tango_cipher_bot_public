@@ -14,9 +14,9 @@
     </noscript>
     <script>
       try {
-        window.location.replace("./pwa/index.html");
+        window.location.replace("./pwa/index.html" + location.hash);
       } catch (_) {
-        window.location.href = "./pwa/index.html";
+        window.location.href = "./pwa/index.html" + location.hash;
       }
     </script>
   </body>
