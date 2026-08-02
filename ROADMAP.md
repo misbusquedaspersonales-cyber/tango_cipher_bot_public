@@ -93,3 +93,64 @@ Esto reduciría la fricción para el caso en que el usuario quiere mandar el tex
 **Por qué no se implementó todavía:** el flujo actual es intencionalmente lineal — fuerza el paso por Cifrar antes de poder enviar, lo que protege contra envíos accidentales de texto plano por Telegram. Cambiar esto requiere evaluar si el trade-off entre fricción y seguridad operacional vale la pena para el caso de uso real del proyecto.
 
 **Si se implementa:** los botones deben mostrar su estado actual en el label (ej: "Copiar mensaje" vs "Copiar cifrado") y deshabilitarse visualmente cuando no hay nada que copiar/enviar.
+
+## Fase 8: Recepción de Mensajes (Circuito Completo) ❌ No implementado
+
+### Situación actual
+
+El sistema implementa solo la mitad del circuito. Telegram es un canal de salida: el bot entrega el mensaje cifrado pero la PWA nunca lo lee de vuelta. El receptor tiene que abrir Telegram manualmente, copiar el código cifrado, abrir la PWA y pegarlo en el campo Descifrar.
+
+```
+Emisor (PWA)       Telegram             Receptor
+────────────────────────────────────────────────────────
+Cifrar + Enviar →→→ bot entrega   →→→  abre Telegram manualmente
+                                        copia el código
+                                        abre la PWA manualmente
+                                        pega en Descifrar
+                                        click Descifrar
+                                        lee el mensaje
+```
+
+### Lo que falta construir
+
+**1. Leer mensajes entrantes desde el bot (`getUpdates` o webhook)**
+
+La Bot API de Telegram tiene dos mecanismos para recibir mensajes enviados al bot:
+
+- **Polling (`getUpdates`)** — la PWA pregunta periódicamente `GET /bot{token}/getUpdates?offset=...`. Simple, sin infraestructura, funciona desde el browser directamente. La desventaja es latencia (el intervalo de polling) y que consume batería si se hace muy frecuente.
+- **Webhook** — Telegram hace un POST a una URL cuando llega un mensaje. Requiere un servidor HTTPS con IP pública. No aplica directamente a una PWA estática en GitHub Pages sin un backend intermedio.
+
+Para este proyecto (PWA estática, costo $0), el polling es el camino natural.
+
+**2. Auto-poblar el campo Descifrar**
+
+Cuando el polling detecta un mensaje nuevo que tiene el formato de un código cifrado (empieza con un número seguido de guión y tokens `V`/`#`/`~`), cargarlo automáticamente en el textarea de Descifrar para que el receptor solo tenga que hacer click en el botón.
+
+**3. Notificación al receptor**
+
+- **Con la app abierta:** un badge o banner en la UI indicando "Mensaje nuevo".
+- **Con la app en segundo plano o cerrada:** el service worker puede mostrar una notificación push del sistema operativo via la Web Push API + Notifications API. Requiere que el usuario haya concedido permiso de notificaciones al instalar la PWA.
+
+### Diseño propuesto
+
+```
+pwa/app.js
+  └── initInbox()
+        ├── pollTelegram() — getUpdates cada N segundos
+        ├── onMessageReceived(text) — detecta formato cifrado
+        │     ├── si es código cifrado → carga en textarea Descifrar
+        │     │   y muestra badge "Mensaje nuevo"
+        │     └── si es texto plano → ignora o muestra en log
+        └── showInboxNotification() — banner en UI o push notification
+
+pwa/service-worker.js
+  └── 'push' event handler — muestra notificación del SO si la app está cerrada
+```
+
+### Consideraciones antes de implementar
+
+- **Un solo bot para dos usuarios:** el bot recibe mensajes de ambos lados. Hay que distinguir qué mensajes son "para mí" — lo más simple es filtrar por `from.id` o usar un chat compartido donde todos los mensajes son relevantes.
+- **`offset` de `getUpdates`:** hay que persistir el último `update_id` procesado (en `localStorage`) para no mostrar mensajes viejos cada vez que se abre la app.
+- **Intervalo de polling:** 5-10 segundos es razonable para una conversación humana. Menos de 3 segundos empieza a ser agresivo con la batería del móvil.
+- **Permisos de notificación:** la Web Push API requiere consentimiento explícito del usuario. Hay que pedirlo en un momento con contexto (no al arrancar la app en frío).
+- **El bot token queda expuesto en el browser:** ya ocurre hoy para enviar mensajes. No es nuevo, pero vale mencionarlo: cualquiera que inspeccione `localStorage` puede leer el token y hacer polling ellos también. La mitigación es el PIN de dispositivo (Layer 2 de `secure-vault.js`).
