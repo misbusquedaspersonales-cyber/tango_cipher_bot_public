@@ -631,9 +631,11 @@ function applyDeepLinkIfPending() {
     setStatus($("#composer-status"), "Mensaje recibido — tocá Descifrar para leerlo.", "info");
 }
 
-// Module-level: read once at parse time, before any async vault work.
-// consumeDeepLink() clears the hash right away.
-let pendingDeepLink = consumeDeepLink();
+// Module-level variable — set by consumeDeepLink() inside init(), before
+// the vault unlock path begins. Keeping it here (rather than inside init's
+// closure) lets applyDeepLinkIfPending() and enterComposer() reach it
+// without parameters while still being called lazily (not at parse time).
+let pendingDeepLink = null;
 
 function enterComposer() {
     populateTangoSelect();
@@ -644,6 +646,9 @@ function enterComposer() {
 }
 
 async function init() {
+    // Read and clear the URL fragment first — before any async work — so the
+    // ciphertext disappears from the address bar even if vault unlock is slow.
+    pendingDeepLink = consumeDeepLink();
     $("#unlock-form").addEventListener("submit", handleUnlockSubmit);
     $("#pin-unlock-form").addEventListener("submit", handlePinUnlockSubmit);
     $("#mode-cifrar").addEventListener("click", () => setMode("cifrar"));
