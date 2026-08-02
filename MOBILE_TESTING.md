@@ -201,3 +201,15 @@ Estos dos puntos no son cubiertos por tests automatizados y deben verificarse ma
 - Si el compositor abre en modo Cifrar con el textarea vacío: `pendingDeepLink` fue null al llegar a `enterComposer()`. Posible causa: el fragment se perdió antes de que `consumeDeepLink()` corriera. Revisar `location.hash` en DevTools en el momento exacto en que `init()` empieza.
 - Si el compositor abre en modo Descifrar pero el textarea vacío: `applyDeepLinkIfPending()` corrió pero `pendingDeepLink` era null. Misma causa probable.
 - Si la pantalla de desbloqueo muestra el textarea cifrado visible (sin haber desbloqueado): no debería ocurrir — `applyDeepLinkIfPending()` solo se llama desde `enterComposer()`, que requiere vault abierto. Si pasa, es una regresión en el flujo de pantallas.
+
+### 7.1-C. Fragmento malformado — error descriptivo, sin crash
+
+**Contexto:** si alguien comparte una URL con un `#c=` inválido (truncado, editado a mano, o con caracteres rotos), `applyDeepLinkIfPending()` pre-carga el campo y el usuario hace click en Descifrar. `descifrarMensaje()` ya valida defensivamente y lanza errores descriptivos — este test confirma que esa cadena funciona end-to-end desde un deep link real, sin crash ni mensaje críptico.
+
+**Pasos:**
+1. Abrir manualmente la URL: `https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html#c=esto-no-es-un-codigo`
+2. Desbloquear si es necesario.
+3. El compositor debe abrirse en modo Descifrar con `esto-no-es-un-codigo` en el textarea.
+4. Apretar Descifrar.
+
+**Resultado esperado:** mensaje de error descriptivo en el status (ej. "Clave enmascarada no es un número: 'esto'"), sin crash, sin pantalla en blanco. La app sigue funcional — se puede limpiar el campo y usar normalmente.

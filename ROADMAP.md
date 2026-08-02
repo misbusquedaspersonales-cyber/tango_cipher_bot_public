@@ -122,8 +122,8 @@ Si la URL apareciera como texto plano, Telegram generaría una vista previa del 
 - [x] Test manual: enviar desde un dispositivo, tocar el botón desde la notificación de Telegram en el otro, confirmar que llega pre-cargado.
 
 #### Fase 7.2 — Pulido de UX
-- [ ] Manejo de error si el fragmento no es un código cifrado válido — mostrar el mismo mensaje de error que ya existe para input inválido, no un crash silencioso.
-- [ ] Si el vault ya está desbloqueado en esa sesión, ofrecer botón "Descifrar ahora" prominente.
+- [x] Manejo de error si el fragmento no es un código cifrado válido — el campo se pre-carga igual y el error descriptivo existente de `descifrarMensaje()` aparece en el status al hacer click en Descifrar. Confirmado con prueba manual (`#c=esto-no-es-un-codigo` → "Clave enmascarada no es un número: 'esto'").
+- [x] Si el vault ya está desbloqueado en esa sesión (flujo sin fricción), `handleRunAction()` se dispara automáticamente al entrar al compositor — el receptor ve el texto descifrado directamente sin ningún click extra. En el flujo con PIN o primer desbloqueo, se muestra el hint "Mensaje recibido — tocá Descifrar para leerlo." en su lugar.
 
 #### Fase 7.3 — Inbox real dentro de la PWA (opcional, solo si hay necesidad concreta)
 - [ ] Solo si Fase 7.1 no cubre la necesidad: evaluar MTProto/GramJS para leer el chat como la cuenta real del receptor. Es sustancialmente más complejo y sensible en términos de seguridad (una sesión de usuario de Telegram es más poderosa que un token de bot). No implementar sin una razón concreta.

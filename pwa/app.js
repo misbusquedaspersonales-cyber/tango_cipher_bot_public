@@ -619,16 +619,34 @@ function consumeDeepLink() {
  * If a ciphertext arrived via deep link, switch to Descifrar mode and
  * pre-load it into the textarea. Called from enterComposer() once the
  * vault is open and the composer is visible.
+ *
+ * Fase 7.2: if the vault was already open (frictionless mode, no unlock
+ * screen was shown), auto-run descifrarMensaje() immediately so the
+ * receiver sees the plaintext in one tap instead of two. If decryption
+ * fails (malformed fragment), the existing error handling in
+ * handleRunAction() shows a descriptive message — no crash.
+ *
+ * @param {boolean} autoRun - true when enterComposer() was reached without
+ *   going through an unlock screen (vault was already open this session).
  */
-function applyDeepLinkIfPending() {
+function applyDeepLinkIfPending(autoRun = false) {
     if (!pendingDeepLink) return;
     const codigo = pendingDeepLink;
     pendingDeepLink = null;
 
     setMode("descifrar");
     $("#message-input").value = codigo;
-    // Surface a hint so the user knows where this came from.
-    setStatus($("#composer-status"), "Mensaje recibido — tocá Descifrar para leerlo.", "info");
+
+    if (autoRun) {
+        // Vault already open — run decryption immediately. handleRunAction()
+        // handles both the success path (renders plaintext) and the error
+        // path (shows descriptive status message) without any extra code here.
+        handleRunAction();
+    } else {
+        // Vault was just unlocked — surface a hint so the user knows what
+        // landed in the field and what to do next.
+        setStatus($("#composer-status"), "Mensaje recibido — tocá Descifrar para leerlo.", "info");
+    }
 }
 
 // Module-level variable — set by consumeDeepLink() inside init(), before
@@ -637,12 +655,12 @@ function applyDeepLinkIfPending() {
 // without parameters while still being called lazily (not at parse time).
 let pendingDeepLink = null;
 
-function enterComposer() {
+function enterComposer(autoRunDeepLink = false) {
     populateTangoSelect();
     populateTelegramFields();
     setMode("cifrar");
     showScreen("app");
-    applyDeepLinkIfPending();
+    applyDeepLinkIfPending(autoRunDeepLink);
 }
 
 async function init() {
@@ -682,7 +700,7 @@ async function init() {
         showScreen("pin-unlock");
     } else if (await hasPayloadDirect()) {
         payload = await loadPayloadDirect();
-        enterComposer();
+        enterComposer(true); // vault was already open — auto-run deep link if present
     } else {
         // Covers true first run, and the edge case where localStorage says
         // 'pin' but the sealed IndexedDB record is missing (e.g. the user
