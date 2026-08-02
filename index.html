@@ -6,10 +6,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#1a110f" />
     <meta name="color-scheme" content="dark" />
-    <meta http-equiv="refresh" content="0; url=./pwa/index.html" />
     <link rel="icon" href="pwa/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="pwa/icons/icon-192.png" />
     <link rel="manifest" href="pwa/manifest.json" />
+    <script>
+      // Redirect synchronously in <head> — before any meta-refresh or body
+      // parsing — so location.hash (the #c=... deep link fragment) is
+      // preserved. A static <meta http-equiv="refresh"> fires before <body>
+      // scripts but AFTER <head> scripts, so putting this here wins the race.
+      // location.replace() keeps the back button clean.
+      try {
+        window.location.replace("./pwa/index.html" + location.hash);
+      } catch (_) {
+        window.location.href = "./pwa/index.html" + location.hash;
+      }
+    </script>
     <style>
       :root {
         --ink: #f6e7d2;
@@ -81,22 +92,11 @@
         <noscript>
           <p style="color:#e8c07a;">
             Tu navegador tiene JavaScript desactivado o no siguió el
-            <code>meta refresh</code>. Tocá el botón.
+            redirect. Tocá el botón.
           </p>
         </noscript>
         <a class="cta" href="./pwa/index.html">Abrir Tango Cifrado →</a>
       </main>
     </div>
-    <script>
-      // Runs *after* meta refresh if JS is enabled; meta refresh gets there
-      // first most of the time. location.replace() avoids adding this
-      // redirect alias page to the browser history (Back button → clean).
-      // location.hash is forwarded so deep links (#c=...) survive the redirect.
-      try {
-        window.location.replace("./pwa/index.html" + location.hash);
-      } catch (_) {
-        window.location.href = "./pwa/index.html" + location.hash;
-      }
-    </script>
   </body>
 </html>
