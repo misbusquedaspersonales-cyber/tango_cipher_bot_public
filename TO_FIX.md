@@ -6,8 +6,8 @@
 |---|---|---|---|
 | 🟢 P3 (Low) | 2 | 1 | 1 |
 | 🔵 P4 (Refactor) | 4 | 3 | 1 |
-| 🔧 Follow-up (2026-08-01) | 5 | 4 | 1 |
-| **Total** | **11** | **8** | **3** |
+| 🔧 Follow-up (2026-08-01) | 6 | 4 | 2 |
+| **Total** | **12** | **8** | **4** |
 
 ---
 
@@ -88,6 +88,21 @@
 - Path references fixed inside moved files (`../../private_core`, `parent.parent.parent/"pwa"`).
 - `check-pwa-assets.yml` and all doc references updated to `scripts/dev/check_pwa_assets.py`.
 - **`build-encrypted-bundle.yml` run: paths NOT updated** — this workflow runs in the private repo's CI checkout, where the scripts still live at the flat `scripts/build_encrypted_bundle.py` path. The `scripts/ci/` copies in this public repo are reference copies for local tests only; they are not what runs in production CI. Keep both in sync by hand when logic changes. See also: `scripts/ci/build_encrypted_bundle.py` and `decrypt_bundle_cli.py` docstrings.
+
+---
+
+## 🔧 Follow-up Review (2026-08-01)
+
+### [ ] F-6: `deeplink.test.mjs` Tests Duplicate Logic Instead of Importing from `app.js`
+
+- **Added**: 2026-08-01 (session 4), after Fase 7.1 deep-link feature landed.
+- **Problem**: `tests/js/deeplink.test.mjs` reimplements `consumeDeepLink()` and `buildSendMessageBody()` as inline copies rather than importing them from `pwa/app.js`. The test file even carries a comment: "must stay in sync with the implementation in pwa/app.js." This is the same two-copies-that-must-be-kept-in-sync pattern flagged for `scripts/ci/build_encrypted_bundle.py` — if someone edits the real function without updating the test copy, tests keep passing while real code silently breaks.
+- **Why it happened**: `app.js` uses `document`, `location`, `history`, `navigator` at module scope — importing it in Node without a DOM stub throws immediately. `cipherEngine.js` and `secure-vault.js` are importable directly because they only touch Web Crypto and IndexedDB, both of which can be stubbed. `app.js` can't be imported the same way without a full DOM harness.
+- **Fix**: one of two paths:
+  1. **Extract** `consumeDeepLink()` and the `reply_markup` builder into a small DOM-free module (e.g. `pwa/deeplink.js`) that `app.js` imports. Then both `deeplink.test.mjs` and `app.js` import the real implementation — zero duplication.
+  2. **Stub the DOM** in the test file the same way `pwa_e2e.test.mjs` stubs `indexedDB` and `localStorage`, then import `app.js` for real via `new URL(...)`. More setup, but tests the actual wiring rather than an extracted helper.
+- **Option 1 is simpler** and consistent with the `corpus.py` / `telegram.py` split already done on the Python side (P4-1). `deeplink.js` would be ~30 lines and have zero dependencies beyond standard browser APIs.
+- **Not urgent**: the current tests are better than nothing and the duplicated logic is simple enough that drift is low-risk in the short term. But fix before app.js grows more testable-but-untested functions.
 
 ---
 

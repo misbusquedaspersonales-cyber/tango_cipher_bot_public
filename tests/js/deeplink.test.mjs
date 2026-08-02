@@ -7,10 +7,12 @@
  *   - enviarATelegram() reply_markup: verifies the inline_keyboard button
  *     is included with the correct url in the Telegram API payload.
  *
- * consumeDeepLink() and applyDeepLinkIfPending() live in app.js alongside
- * DOM-dependent code, so we test them by importing the pure logic directly
- * after stubbing the globals they need (location, history).
- * enviarATelegram() makes a fetch() call; we stub fetch to capture the body.
+ * KNOWN LIMITATION (TO_FIX.md F-6): consumeDeepLink() and buildSendMessageBody()
+ * are reimplemented here as inline copies rather than imported from pwa/app.js,
+ * because app.js touches DOM globals at module scope and can't be imported in
+ * Node without a full DOM stub. These copies must stay in sync with the real
+ * implementations. The fix is to extract them into a DOM-free pwa/deeplink.js
+ * module that both app.js and this test file import directly.
  */
 
 import test from 'node:test';
