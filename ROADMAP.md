@@ -74,29 +74,7 @@ El pipeline de despliegue los cifra antes de publicar.
 - **Cero Fricción:** `CLAVE_DESPLIEGUE` se ingresa una sola vez al instalar la PWA. A partir de allí, uso instantáneo sin contraseñas.
 - **Costo $0:** GitHub Pages + GitHub Actions + Telegram Bot API, todo gratuito
 
-## Fase 7: Mejoras de UX (Ideas a Evaluar)
-
-### Flujo de acción unificado para Copiar / Enviar a Telegram
-
-- [ ] Evaluar si vale implementar el flujo unificado (ver descripción abajo) antes de avanzar con Fase 8.
-
-**Estado actual:** los botones Copiar y Enviar a Telegram solo aparecen después de hacer click en Cifrar. Si el usuario no cifra, no puede copiar ni enviar nada.
-
-**Posible mejora:** hacer que Copiar y Enviar operen sobre lo que haya disponible en cada momento — sin necesidad de cifrar primero:
-
-| Estado | Copiar | Enviar |
-|---|---|---|
-| Sin texto | deshabilitado | deshabilitado |
-| Texto escrito, sin cifrar | copia el mensaje original | envía el mensaje original |
-| Texto cifrado | copia el código cifrado | envía el código cifrado |
-
-Esto reduciría la fricción para el caso en que el usuario quiere mandar el texto plano por Telegram directamente (aunque rompería el principio Zero-Trust si el canal no es seguro), y también permitiría copiar el texto original para pegarlo en otro lado antes de cifrarlo.
-
-**Por qué no se implementó todavía:** el flujo actual es intencionalmente lineal — fuerza el paso por Cifrar antes de poder enviar, lo que protege contra envíos accidentales de texto plano por Telegram. Cambiar esto requiere evaluar si el trade-off entre fricción y seguridad operacional vale la pena para el caso de uso real del proyecto.
-
-**Si se implementa:** los botones deben mostrar su estado actual en el label (ej: "Copiar mensaje" vs "Copiar cifrado") y deshabilitarse visualmente cuando no hay nada que copiar/enviar.
-
-## Fase 8: Recepción de Mensajes (Circuito Completo) ❌ No implementado
+## Fase 7: Recepción de Mensajes (Circuito Completo) ❌ No implementado
 
 ### Objetivo real
 
@@ -137,15 +115,37 @@ Si la URL apareciera como texto plano, Telegram generaría una vista previa del 
 
 ### Fases propuestas
 
-#### Fase 8.1 — Deep link básico (sin infraestructura nueva)
+#### Fase 7.1 — Deep link básico (sin infraestructura nueva)
 - [ ] `enviarATelegram()` en `app.js`: agregar `reply_markup` con `inline_keyboard` de un botón `url` → `pwa/index.html#c=<código>`.
 - [ ] `app.js` al iniciar: leer `location.hash`, detectar `c=`, cambiar a modo Descifrar, pre-cargar el textarea, limpiar el hash con `history.replaceState`.
 - [ ] Resolver el redirect de `index.html`/`go.html` para no perder el fragmento.
 - [ ] Test manual: enviar desde un dispositivo, tocar el botón desde la notificación de Telegram en el otro, confirmar que llega pre-cargado.
 
-#### Fase 8.2 — Pulido de UX
+#### Fase 7.2 — Pulido de UX
 - [ ] Manejo de error si el fragmento no es un código cifrado válido — mostrar el mismo mensaje de error que ya existe para input inválido, no un crash silencioso.
 - [ ] Si el vault ya está desbloqueado en esa sesión, ofrecer botón "Descifrar ahora" prominente.
 
-#### Fase 8.3 — Inbox real dentro de la PWA (opcional, solo si hay necesidad concreta)
-- [ ] Solo si Fase 8.1 no cubre la necesidad: evaluar MTProto/GramJS para leer el chat como la cuenta real del receptor. Es sustancialmente más complejo y sensible en términos de seguridad (una sesión de usuario de Telegram es más poderosa que un token de bot). No implementar sin una razón concreta.
+#### Fase 7.3 — Inbox real dentro de la PWA (opcional, solo si hay necesidad concreta)
+- [ ] Solo si Fase 7.1 no cubre la necesidad: evaluar MTProto/GramJS para leer el chat como la cuenta real del receptor. Es sustancialmente más complejo y sensible en términos de seguridad (una sesión de usuario de Telegram es más poderosa que un token de bot). No implementar sin una razón concreta.
+
+## Fase 8: Mejoras de UX (Ideas a Evaluar)
+
+### Flujo de acción unificado para Copiar / Enviar a Telegram
+
+- [ ] Evaluar si vale implementar el flujo unificado (ver descripción abajo).
+
+**Estado actual:** los botones Copiar y Enviar a Telegram solo aparecen después de hacer click en Cifrar. Si el usuario no cifra, no puede copiar ni enviar nada.
+
+**Posible mejora:** hacer que Copiar y Enviar operen sobre lo que haya disponible en cada momento — sin necesidad de cifrar primero:
+
+| Estado | Copiar | Enviar |
+|---|---|---|
+| Sin texto | deshabilitado | deshabilitado |
+| Texto escrito, sin cifrar | copia el mensaje original | envía el mensaje original |
+| Texto cifrado | copia el código cifrado | envía el código cifrado |
+
+Esto reduciría la fricción para el caso en que el usuario quiere mandar el texto plano por Telegram directamente (aunque rompería el principio Zero-Trust si el canal no es seguro), y también permitiría copiar el texto original para pegarlo en otro lado antes de cifrarlo.
+
+**Por qué no se implementó todavía:** el flujo actual es intencionalmente lineal — fuerza el paso por Cifrar antes de poder enviar, lo que protege contra envíos accidentales de texto plano por Telegram. Cambiar esto requiere evaluar si el trade-off entre fricción y seguridad operacional vale la pena para el caso de uso real del proyecto.
+
+**Si se implementa:** los botones deben mostrar su estado actual en el label (ej: "Copiar mensaje" vs "Copiar cifrado") y deshabilitarse visualmente cuando no hay nada que copiar/enviar.
