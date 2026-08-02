@@ -78,6 +78,8 @@ El pipeline de despliegue los cifra antes de publicar.
 
 ### Flujo de acción unificado para Copiar / Enviar a Telegram
 
+- [ ] Evaluar si vale implementar el flujo unificado (ver descripción abajo) antes de avanzar con Fase 8.
+
 **Estado actual:** los botones Copiar y Enviar a Telegram solo aparecen después de hacer click en Cifrar. Si el usuario no cifra, no puede copiar ni enviar nada.
 
 **Posible mejora:** hacer que Copiar y Enviar operen sobre lo que haya disponible en cada momento — sin necesidad de cifrar primero:
@@ -146,4 +148,4 @@ Si la URL apareciera como texto plano, Telegram generaría una vista previa del 
 - [ ] Si el vault ya está desbloqueado en esa sesión, ofrecer botón "Descifrar ahora" prominente.
 
 #### Fase 8.3 — Inbox real dentro de la PWA (opcional, solo si hay necesidad concreta)
-Si alguna vez se necesita ver mensajes recibidos dentro de la PWA sin depender de la notificación de Telegram, la única vía correcta es usar la API de cliente de Telegram (MTProto, vía una librería como GramJS) en vez del Bot API, para leer el chat como la cuenta real del receptor. Es sustancialmente más complejo y sensible en términos de seguridad (una sesión de usuario de Telegram es más poderosa que un token de bot). No implementar sin una razón concreta que Fase 8.1 no cubra.
+- [ ] Solo si Fase 8.1 no cubre la necesidad: evaluar MTProto/GramJS para leer el chat como la cuenta real del receptor. Es sustancialmente más complejo y sensible en términos de seguridad (una sesión de usuario de Telegram es más poderosa que un token de bot). No implementar sin una razón concreta.
