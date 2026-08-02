@@ -141,3 +141,63 @@ Además del checklist por release, confirmar siempre:
 - Standalone sin barra URL ✅
 - Fuentes cargan (IBM Plex Mono en chips — no fallback serif sans) ✅
 - Ícono PWA en home screen (el ícono marrón/brass, no el default Chrome) ✅
+
+---
+
+## ✅ Checklist de regresión — Fase 7.1 (deep link / recepción de mensajes)
+
+Estos dos puntos no son cubiertos por tests automatizados y deben verificarse manualmente en dispositivo real antes de considerar Fase 7.1 completa.
+
+### 7.1-A. iOS Telegram → botón inline abre la PWA instalada (no Safari)
+
+**Contexto:** iOS maneja la apertura de URLs desde apps externas (Telegram) de forma inconsistente dependiendo de la versión y de cómo está registrada la PWA. El riesgo es que el botón "Descifrar →" abra Safari en lugar del ícono instalado en Home Screen, forzando al receptor a repetir el desbloqueo y perdiendo el contexto.
+
+**Setup:**
+- Dispositivo iOS con la PWA instalada en Home Screen (Compartir → Agregar a pantalla de inicio desde Safari).
+- Dispositivo emisor con la app desbloqueada y Telegram configurado.
+
+**Pasos:**
+1. En el emisor: cifrar un mensaje real, apretar Enviar a Telegram. Confirmar "Enviado."
+2. En el receptor iOS: ver llegar la notificación de Telegram.
+3. Tocar la notificación para abrir el chat, luego tocar el botón **Descifrar →**.
+
+**Resultado esperado:**
+- Se abre la PWA instalada en modo standalone (sin barra de Safari, sin browser chrome).
+- El campo Descifrar ya tiene el texto cifrado cargado.
+- Un toque en Descifrar muestra el mensaje original.
+
+**Resultado problemático / qué reportar si falla:**
+- Si abre Safari en lugar del ícono instalado: iOS no está reconociendo la PWA como handler para su propia URL. Anotar la versión de iOS. Workaround documentado: el receptor puede copiar el código manualmente desde el mensaje de Telegram y pegarlo en el campo Descifrar.
+- Si abre la PWA pero el campo aparece vacío: el fragment `#c=...` se perdió en la apertura desde Telegram (no en los redirects). Revisar en Safari DevTools (Mac → Desarrollador → [dispositivo]) qué `location.hash` llega a `app.js`.
+- Si abre la PWA en modo browser tab (con barra URL): el manifiesto `display: standalone` no está siendo respetado al abrir desde Telegram. El deep link sigue funcionando, solo la presentación es diferente.
+
+---
+
+### 7.1-B. Vault bloqueado al recibir el deep link — ciphertext sobrevive el desbloqueo
+
+**Contexto:** `pendingDeepLink` se setea en `init()` antes del check de vault, y `applyDeepLinkIfPending()` solo corre cuando `enterComposer()` es alcanzado. En teoría el ciphertext sobrevive el PIN o la pantalla de CLAVE_DESPLIEGUE. Este test confirma que es así en la práctica.
+
+**Setup:**
+- Dispositivo receptor con el vault bloqueado. Dos variantes:
+  - **Variante A (PIN):** vault en modo PIN (Seguridad del dispositivo activada). La app muestra la pantalla PIN al abrirse.
+  - **Variante B (primera apertura):** vault nunca desbloqueado en este dispositivo (primera vez o datos borrados). La app muestra la pantalla CLAVE_DESPLIEGUE.
+
+**Pasos:**
+1. Asegurarse de que la app está cerrada por completo en el receptor (force-close).
+2. En el emisor: cifrar y enviar.
+3. En el receptor: tocar el botón "Descifrar →" desde Telegram (sin haber abierto la app antes).
+4. La app abre. Debería mostrar la pantalla de desbloqueo (PIN o CLAVE_DESPLIEGUE según variante).
+5. Completar el desbloqueo normalmente.
+6. La app entra al compositor.
+
+**Resultado esperado:**
+- El compositor muestra el modo **Descifrar** (no Cifrar).
+- El textarea ya tiene el código cifrado cargado.
+- El hint "Mensaje recibido — tocá Descifrar para leerlo." aparece debajo.
+- Un toque en Descifrar muestra el mensaje original.
+- El hash ya no figura en la barra de direcciones.
+
+**Resultado problemático / qué reportar si falla:**
+- Si el compositor abre en modo Cifrar con el textarea vacío: `pendingDeepLink` fue null al llegar a `enterComposer()`. Posible causa: el fragment se perdió antes de que `consumeDeepLink()` corriera. Revisar `location.hash` en DevTools en el momento exacto en que `init()` empieza.
+- Si el compositor abre en modo Descifrar pero el textarea vacío: `applyDeepLinkIfPending()` corrió pero `pendingDeepLink` era null. Misma causa probable.
+- Si la pantalla de desbloqueo muestra el textarea cifrado visible (sin haber desbloqueado): no debería ocurrir — `applyDeepLinkIfPending()` solo se llama desde `enterComposer()`, que requiere vault abierto. Si pasa, es una regresión en el flujo de pantallas.
