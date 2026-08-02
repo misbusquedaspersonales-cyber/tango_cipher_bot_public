@@ -583,6 +583,18 @@ async function init() {
     $("#run-action").addEventListener("click", handleRunAction);
     $("#copy-button").addEventListener("click", handleCopy);
     $("#send-button").addEventListener("click", handleSend);
+
+    // Hide the send-row and clear the output whenever the textarea is emptied.
+    // Without this, clicking Cifrar then erasing the text leaves the Copiar /
+    // Enviar buttons visible with stale ciphertext behind them.
+    $("#message-input").addEventListener("input", () => {
+        if (!$("#message-input").value.trim()) {
+            $("#send-row").hidden = true;
+            $("#send-row").dataset.cipherText = "";
+            $("#output-strip").innerHTML = "";
+            setStatus($("#composer-status"), "", "info");
+        }
+    });
     initSettings();
     initSecuritySettings();
 

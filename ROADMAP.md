@@ -73,3 +73,23 @@ El pipeline de despliegue los cifra antes de publicar.
 - **SALT como obfuscación, no criptografía:** offset numérico que enmascara el ID del tango. La seguridad real viene de mantener `tangos.json` privado. En producción se inyecta como secreto de GitHub Actions (`CIFRADO_SALT`). `DEFAULT_SALT = 47` es solo un placeholder de desarrollo.
 - **Cero Fricción:** `CLAVE_DESPLIEGUE` se ingresa una sola vez al instalar la PWA. A partir de allí, uso instantáneo sin contraseñas.
 - **Costo $0:** GitHub Pages + GitHub Actions + Telegram Bot API, todo gratuito
+
+## Fase 7: Mejoras de UX (Ideas a Evaluar)
+
+### Flujo de acción unificado para Copiar / Enviar a Telegram
+
+**Estado actual:** los botones Copiar y Enviar a Telegram solo aparecen después de hacer click en Cifrar. Si el usuario no cifra, no puede copiar ni enviar nada.
+
+**Posible mejora:** hacer que Copiar y Enviar operen sobre lo que haya disponible en cada momento — sin necesidad de cifrar primero:
+
+| Estado | Copiar | Enviar |
+|---|---|---|
+| Sin texto | deshabilitado | deshabilitado |
+| Texto escrito, sin cifrar | copia el mensaje original | envía el mensaje original |
+| Texto cifrado | copia el código cifrado | envía el código cifrado |
+
+Esto reduciría la fricción para el caso en que el usuario quiere mandar el texto plano por Telegram directamente (aunque rompería el principio Zero-Trust si el canal no es seguro), y también permitiría copiar el texto original para pegarlo en otro lado antes de cifrarlo.
+
+**Por qué no se implementó todavía:** el flujo actual es intencionalmente lineal — fuerza el paso por Cifrar antes de poder enviar, lo que protege contra envíos accidentales de texto plano por Telegram. Cambiar esto requiere evaluar si el trade-off entre fricción y seguridad operacional vale la pena para el caso de uso real del proyecto.
+
+**Si se implementa:** los botones deben mostrar su estado actual en el label (ej: "Copiar mensaje" vs "Copiar cifrado") y deshabilitarse visualmente cuando no hay nada que copiar/enviar.
