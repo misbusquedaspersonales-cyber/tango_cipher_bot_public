@@ -49,7 +49,7 @@ En `scripts/aliases/` hay tres comandos ejecutables listos para usar. Agregalos 
 agregando esta línea al final de tu `~/.bashrc`, `~/.zshrc` o `~/.profile`:
 
 ```bash
-export PATH="/root/JOB/CIFRADO-TANGOS/Tango/scripts/aliases:$PATH"
+export PATH="/ruta/al/repo/scripts/aliases:$PATH"
 ```
 
 Reabrí tu terminal (o corré `source ~/.bashrc`) y ya podés usar:
