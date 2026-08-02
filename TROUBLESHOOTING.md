@@ -349,3 +349,97 @@ Click 3: Desbloquear una vez, activar Modo Avión, volver a abrir  →  abre ins
 ```
 
 Si las 6 comandos + 3 clicks pasan, el deploy está aprobado para uso diario móvil Android y GitHub Pages.
+
+---
+
+## Problema 14: Cómo configurar el Chat ID para comunicación entre dos personas
+
+### Contexto
+
+El chat ID en `.env` (`TELEGRAM_CHAT_ID=1341610334`) es el DM privado entre el bot y un único usuario. Mensajes enviados a ese ID solo los ve esa persona. Para que dos personas puedan intercambiar mensajes cifrados, necesitan un chat compartido o intercambiar sus IDs personales.
+
+---
+
+### Opción A — Grupo compartido (para primeros intentos)
+
+La más simple para empezar: ambas personas están en el mismo grupo y ven todos los mensajes.
+
+**Setup (una sola vez):**
+
+1. Crear un grupo en Telegram. Agregar a ambos participantes y al bot `@ukotango_bot`.
+2. Mandar cualquier mensaje en el grupo (necesario para que `getUpdates` lo detecte).
+3. Obtener el chat ID del grupo — ejecutar desde terminal:
+
+```bash
+TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' /root/JOB-sda2/CIFRADO-TANGOS/Tango/.env | cut -d= -f2)
+curl -s "https://api.telegram.org/bot${TOKEN}/getUpdates" \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for u in data.get('result', []):
+    chat = u.get('message', {}).get('chat', {})
+    print(chat.get('type'), chat.get('id'), chat.get('title', chat.get('first_name','')))
+" | sort -u
+```
+
+El grupo aparece con `type=group` o `supergroup` y un ID negativo (ej: `-1001234567890`).
+
+4. Ambos configuran ese ID en la PWA: Ajustes → Chat ID → Guardar.
+
+**Uso:**
+- Cualquiera cifra y envía → el mensaje llega al grupo → el otro toca "Descifrar →" → descifra.
+- Ambos ven el historial de mensajes cifrados en el chat del grupo.
+
+**Limitación:** todos los mensajes los ve cualquiera en el grupo. Para conversación privada real, usar Opción B.
+
+---
+
+### Opción B — Chat IDs cruzados (uso final, máxima privacidad)
+
+Cada persona envía directamente al DM del bot del otro. Nadie más ve los mensajes.
+
+**Setup:**
+
+1. Tu cliente abre Telegram y envía `/start` a `@ukotango_bot`. Esto abre un DM privado y registra su chat ID.
+
+2. Obtener el chat ID de tu cliente — después de que mande `/start`, ejecutar:
+
+```bash
+TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' /root/JOB-sda2/CIFRADO-TANGOS/Tango/.env | cut -d= -f2)
+curl -s "https://api.telegram.org/bot${TOKEN}/getUpdates" \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for u in data.get('result', []):
+    chat = u.get('message', {}).get('chat', {})
+    if chat.get('type') == 'private':
+        print('chat_id:', chat.get('id'), '|', chat.get('first_name',''), chat.get('last_name',''))
+" | sort -u
+```
+
+Aparecerán todos los DMs privados que tuvieron con el bot. Identificar el de tu cliente por nombre.
+
+3. Configuración cruzada:
+   - **Vos**: ponés el chat ID de tu cliente en tu PWA (Ajustes → Chat ID). Tus mensajes le llegan a él.
+   - **Tu cliente**: pone tu chat ID (`1341610334`) en su PWA. Sus mensajes te llegan a vos.
+
+4. Si `getUpdates` devuelve lista vacía: el bot no recibió mensajes recientes. Pedir al cliente que mande `/start` de nuevo, esperar 10 segundos, y repetir el curl.
+
+**Limitación de `getUpdates`:** solo devuelve los últimos 100 updates y los marca como "leídos" en cada llamada. Si ya los consumiste antes (por ejemplo, el bot los procesó), no aparecen de vuelta. En ese caso, el cliente puede reenviar `/start` para generar un update nuevo.
+
+---
+
+### Verificar que el chat ID es correcto antes de usarlo en producción
+
+```bash
+TOKEN=$(grep '^TELEGRAM_BOT_TOKEN=' /root/JOB-sda2/CIFRADO-TANGOS/Tango/.env | cut -d= -f2)
+CHAT_ID="<el-id-que-queres-verificar>"
+curl -s -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+  -H "Content-Type: application/json" \
+  -d "{\"chat_id\": \"${CHAT_ID}\", \"text\": \"test de verificación\"}" \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print('ok:', d.get('ok'), d.get('description',''))"
+```
+
+`ok: True` → el ID es correcto y el bot tiene acceso a ese chat.
+`ok: False` + `"chat not found"` → ID incorrecto o el usuario nunca mandó `/start` al bot.
+`ok: False` + `"bot was kicked"` → el bot fue removido del grupo.
