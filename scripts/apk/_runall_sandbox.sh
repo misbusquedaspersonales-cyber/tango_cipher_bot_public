@@ -15,6 +15,17 @@ export KEYSTORE_PASS="TangoCifrado-Sandbox-2026!"
 export KEYSTORE_ALIAS="android"
 export PACKAGE_NAME="com.tangocifrado.app"
 
+echo "============================================================"
+echo "⚠️  ESTE SCRIPT GENERA UNA KEYSTORE DE PRUEBA, NO DE PRODUCCIÓN."
+echo "   La contraseña está hardcodeada arriba y es pública en el repo."
+echo "   NUNCA firmes un APK real distribuido con esta keystore."
+echo "   Después de correr esto, ejecutá:"
+echo "     scripts/apk/purge-sandbox-keystore.sh"
+echo "   y regenerá una keystore real en tu máquina."
+echo "============================================================"
+cd "$REPO_ROOT"
+touch "$REPO_ROOT/tango-cifrado-apk/SANDBOX_KEYSTORE_DO_NOT_SHIP.txt"
+
 cd "$REPO_ROOT"
 
 log()  { echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOG_DIR/00_summary.log"; }
