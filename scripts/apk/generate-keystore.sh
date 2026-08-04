@@ -5,6 +5,10 @@
 # tango-cifrado-apk/. Guarda android.keystore + keystore-password.txt en la
 # misma carpeta — AMBOS archivos están en .gitignore, NO los commitees.
 #
+# SEGURIDAD: si en algún momento tu android.keystore o keystore-password.txt
+# aparecieron en un export/dump/log fuera de tu máquina (sandbox, chat, CI
+# log), tratalos como comprometidos y volvé a correr este script desde cero.
+#
 # Después de correr este script:
 #   1. Hacé BACKUP de android.keystore + su contraseña en un lugar seguro.
 #      Si perdés la keystore, no podés publicar updates bajo la misma
@@ -23,6 +27,8 @@
 #   KEYSTORE_KEY_PASS si es distinta de KEYSTORE_PASS; default = igual que KEYSTORE_PASS
 
 set -euo pipefail
+
+KNOWN_COMPROMISED_PASSWORDS=("TangoCifrado-Sandbox-2026!")
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -90,6 +96,13 @@ if [ -z "${KEYSTORE_PASS:-}" ]; then
 else
   KS_PASS="$KEYSTORE_PASS"
   echo -e "${YELLOW}⚠️  Usando contraseña desde variable KEYSTORE_PASS (modo CI).${NC}"
+  for bad in "${KNOWN_COMPROMISED_PASSWORDS[@]}"; do
+    if [ "$KS_PASS" = "$bad" ]; then
+      echo -e "${RED}❌ Esa contraseña quedó expuesta en un export previo y está"
+      echo -e "   marcada como comprometida en este script. Elegí otra.${NC}"
+      exit 1
+    fi
+  done
 fi
 
 KS_KEY_PASS="${KEYSTORE_KEY_PASS:-$KS_PASS}"
