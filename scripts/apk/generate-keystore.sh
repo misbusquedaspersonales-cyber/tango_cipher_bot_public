@@ -1,13 +1,27 @@
 #!/usr/bin/env bash
 # scripts/apk/generate-keystore.sh
 #
-# Genera la keystore de firma para la TWA. CORRER UNA SOLA VEZ dentro de
-# tango-cifrado-apk/. Guarda android.keystore + keystore-password.txt en la
-# misma carpeta — AMBOS archivos están en .gitignore, NO los commitees.
+# Genera la keystore de firma para la TWA. CORRER UNA SOLA VEZ.
+#
+# ⚠️  IMPORTANTE — DÓNDE CORRER ESTE SCRIPT:
+#   NO lo corras desde dentro del workspace del repo si existe alguna
+#   herramienta que genera exports del workspace (Tango_compact.txt u
+#   otro dump). Esas herramientas leen el filesystem directamente sin
+#   respetar .gitignore, y van a exponer android.keystore y
+#   keystore-password.txt en el próximo export.
+#
+#   Correlo desde FUERA del workspace:
+#     mkdir -p ~/tango-signing
+#     cd ~/tango-signing
+#     /ruta/al/repo/scripts/apk/generate-keystore.sh
+#
+#   Por defecto escribe android.keystore + keystore-password.txt en
+#   ~/tango-signing/ cuando se corre desde fuera del workspace.
 #
 # SEGURIDAD: si en algún momento tu android.keystore o keystore-password.txt
 # aparecieron en un export/dump/log fuera de tu máquina (sandbox, chat, CI
-# log), tratalos como comprometidos y volvé a correr este script desde cero.
+# log), tratalos como comprometidos y volvé a correr este script desde cero
+# FUERA del workspace.
 #
 # Después de correr este script:
 #   1. Hacé BACKUP de android.keystore + su contraseña en un lugar seguro.
@@ -28,17 +42,26 @@
 
 set -euo pipefail
 
-KNOWN_COMPROMISED_PASSWORDS=("TangoCifrado-Sandbox-2026!")
+KNOWN_COMPROMISED_PASSWORDS=(
+  "TangoCifrado-Sandbox-2026!"   # sandbox keystore, hardcoded in _runall_sandbox.sh
+  "SeVestiraDeFiesta"            # second keystore, leaked via workspace export tool
+)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# Si estamos en la raíz, la carpeta APK es ./tango-cifrado-apk/. Si ya estamos
-# adentro de tango-cifrado-apk, es $PWD. Permite correr el script desde ambos.
+# Output directory: prefer ~/tango-signing/ (outside the workspace, safe from
+# export tools) unless we're already sitting inside tango-cifrado-apk/.
 if [ -f "$PWD/twa-config.json" ] && [ "$(basename "$PWD")" = "tango-cifrado-apk" ]; then
   APK_DIR="$PWD"
+  echo -e "${YELLOW}⚠️  Corriendo desde dentro del workspace — android.keystore y"
+  echo -e "   keystore-password.txt quedarán en $APK_DIR"
+  echo -e "   Si existe una herramienta de export del workspace, van a leakear."
+  echo -e "   Considerá correr desde ~/tango-signing/ en su lugar.${NC}"
 else
-  APK_DIR="$REPO_ROOT/tango-cifrado-apk"
+  APK_DIR="${SIGNING_DIR:-$HOME/tango-signing}"
+  mkdir -p "$APK_DIR"
+  echo -e "${GREEN}✅ Generando keystore fuera del workspace en: $APK_DIR${NC}"
 fi
 
 KEYSTORE_FILE="$APK_DIR/android.keystore"

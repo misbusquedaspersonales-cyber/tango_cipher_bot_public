@@ -76,17 +76,43 @@ chmod +x scripts/apk/*.sh
 # Instala: Node.js 20, JDK 17, @bubblewrap/cli
 ```
 
-### Paso 3 — Buildear el APK
+### Paso 3 — Generar una nueva keystore FUERA del workspace
+
+> ⚠️ Existe una herramienta que genera exports del workspace (`Tango_compact.txt`
+> u otro dump) que lee el filesystem directamente sin respetar `.gitignore`.
+> Dos keystores anteriores fueron expuestas por este mecanismo. Generá la
+> keystore en `~/tango-signing/`, fuera del workspace, para evitar el leak.
+
+```bash
+mkdir -p ~/tango-signing
+cd ~/tango-signing
+/root/JOB-sda2/CIFRADO-TANGOS/Tango/scripts/apk/generate-keystore.sh
+# Escribe ~/tango-signing/android.keystore y ~/tango-signing/keystore-password.txt
+```
+
+Luego regenerar los assetlinks con la nueva keystore:
+```bash
+KEYSTORE_FILE=~/tango-signing/android.keystore \
+  /root/JOB-sda2/CIFRADO-TANGOS/Tango/scripts/apk/generate-assetlinks.sh
+# Actualiza .well-known/assetlinks.json y pwa/.well-known/assetlinks.json
+cd /root/JOB-sda2/CIFRADO-TANGOS/Tango
+git add .well-known/assetlinks.json pwa/.well-known/assetlinks.json
+git commit -m "deploy(assetlinks): new keystore fingerprint"
+git push
+```
+
+### Paso 4 — Buildear el APK
 
 ```bash
 cd tango-cifrado-apk
-../scripts/apk/build-apk.sh
+KEYSTORE_FILE=~/tango-signing/android.keystore \
+  ../scripts/apk/build-apk.sh
 ```
 
 - La primera vez descarga ~2-5 GB (Android SDK + Gradle). Las siguientes toman ~15s.
 - Los `.apk` y `.aab` quedan en `../dist/apk/`.
 
-### Paso 4 — Probar sideload en Android real
+### Paso 5 — Probar sideload en Android real
 
 1. Pasar `dist/apk/app-release-signed.apk` al teléfono (Telegram, USB, etc.)
 2. Abrir el archivo → Android pide habilitar "Fuentes desconocidas" → habilitar
