@@ -443,3 +443,44 @@ curl -s -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
 `ok: True` → el ID es correcto y el bot tiene acceso a ese chat.
 `ok: False` + `"chat not found"` → ID incorrecto o el usuario nunca mandó `/start` al bot.
 `ok: False` + `"bot was kicked"` → el bot fue removido del grupo.
+
+---
+
+## Problema 15: El archivo `keystore-password.txt` aparece en exports del workspace (Tango_compact.txt o similar)
+
+### Qué está pasando
+
+Existe una herramienta (o proceso de agente) que genera un dump compacto del workspace — `Tango_compact.txt` u otro archivo similar. Esta herramienta lee el filesystem directamente y **no respeta `.gitignore`**. Como resultado, `tango-cifrado-apk/keystore-password.txt` (y potencialmente `android.keystore`) quedan expuestos en ese export cada vez que se genera, independientemente de las reglas de `.gitignore`.
+
+Esto ya ocurrió dos veces:
+- Con la keystore sandbox (contraseña `TangoCifrado-Sandbox-2026!`) — expuesta en el primer export.
+- Con la keystore "real" generada después (contraseña `SeVestiraDeFiesta`) — expuesta en el segundo export.
+
+Ambas keystores deben considerarse comprometidas. Cualquier keystore generada dentro de este workspace sufrirá el mismo destino la próxima vez que se produzca un export.
+
+### Por qué los parches de `.gitignore` no resuelven esto
+
+Los `.gitignore` de git y de `tango-cifrado-apk/` solo afectan qué archivos rastrea git. La herramienta de export no usa git — lee el filesystem directamente. Son dos mecanismos independientes.
+
+### La solución correcta (pendiente de implementar)
+
+Dos caminos, cualquiera sirve:
+
+**Opción A — Agregar una lista de exclusión propia a la herramienta de export.**
+La herramienta que genera `Tango_compact.txt` necesita su propio archivo de exclusión (equivalente a un `.exportignore`), con al menos estas rutas:
+
+```
+tango-cifrado-apk/android.keystore
+tango-cifrado-apk/keystore-password.txt
+tango-cifrado-apk/assetlinks.generated.json
+.env
+```
+
+**Opción B — Generar la keystore fuera del workspace.**
+Mover el material de firma a una carpeta fuera de `/root/JOB-sda2/CIFRADO-TANGOS/Tango/`, por ejemplo `~/tango-signing/`. La herramienta de export solo escanea el workspace; no alcanzaría esa ruta. `build-apk.sh` y el workflow de CI ya soportan apuntar a una ruta externa via `KEYSTORE_FILE`.
+
+### Estado actual
+
+- Ninguna keystore activa tiene contraseña segura en este workspace.
+- Los `assetlinks.json` publicados tienen el fingerprint de la segunda keystore (también comprometida). Antes de buildear un APK para distribución real, hay que generar una tercera keystore fuera del workspace (Opción B) y actualizar los `assetlinks.json`.
+- `generate-keystore.sh` ya rechaza la contraseña sandbox conocida (`TangoCifrado-Sandbox-2026!`) cuando se usa vía `KEYSTORE_PASS` — pero no puede proteger contra leaks por export.
