@@ -1,59 +1,34 @@
 #!/usr/bin/env bash
-# purge-sandbox-keystore.sh
+# scripts/apk/purge-sandbox-keystore.sh
 #
-# Removes all artifacts produced by _runall_sandbox.sh that must NEVER be
-# shipped or used to sign a production APK:
-#   - android.keystore (signed with the public hardcoded password)
-#   - keystore-password.txt (contains the public password)
-#   - assetlinks.generated.json (fingerprint of the compromised keystore)
-#   - SANDBOX_KEYSTORE_DO_NOT_SHIP.txt (sentinel file)
-#
-# After running this, generate a real keystore interactively:
-#   cd tango-cifrado-apk
-#   ../scripts/apk/generate-keystore.sh   # type a real password, no env var
-#   ../scripts/apk/generate-assetlinks.sh
-#   git add .well-known/assetlinks.json pwa/.well-known/assetlinks.json
-#   git commit -m "deploy(assetlinks): real keystore fingerprint"
-#   git push
+# Borra cualquier keystore/assetlinks generados en un sandbox de testing.
+# Correlo ANTES de generar la keystore real de producción si alguna vez
+# corriste _runall_sandbox.sh o cualquier script con KEYSTORE_PASS seteada
+# a un valor de prueba.
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 APK_DIR="$REPO_ROOT/tango-cifrado-apk"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+echo "Borrando material de firma de sandbox (si existe)..."
+rm -fv \
+  "$APK_DIR/android.keystore" \
+  "$APK_DIR/keystore-password.txt" \
+  "$APK_DIR/twa-manifest.json" \
+  "$APK_DIR/assetlinks.generated.json" \
+  "$APK_DIR/SANDBOX_KEYSTORE_DO_NOT_SHIP.txt" \
+  "$REPO_ROOT/.well-known/assetlinks.json" \
+  "$REPO_ROOT/pwa/.well-known/assetlinks.json"
 
-echo "============================================================"
-echo -e "  ${YELLOW}Purgando artefactos de keystore sandbox${NC}"
-echo "============================================================"
-
-purge() {
-    local f="$1"
-    if [ -f "$f" ]; then
-        rm -f "$f"
-        echo -e "  ${GREEN}✅ eliminado:${NC} $f"
-    else
-        echo -e "  (ya no existe: $f)"
-    fi
-}
-
-purge "$APK_DIR/android.keystore"
-purge "$APK_DIR/keystore-password.txt"
-purge "$APK_DIR/assetlinks.generated.json"
-purge "$APK_DIR/SANDBOX_KEYSTORE_DO_NOT_SHIP.txt"
+rm -rf "$REPO_ROOT/_build_apk_logs"
 
 echo
-echo "============================================================"
-echo -e "  ${GREEN}Purga completa.${NC}"
-echo "============================================================"
-echo
-echo "  Siguiente paso — generá una keystore real:"
-echo "    cd tango-cifrado-apk"
-echo "    ../scripts/apk/generate-keystore.sh"
-echo "    ../scripts/apk/generate-assetlinks.sh"
-echo "    git add .well-known/assetlinks.json pwa/.well-known/assetlinks.json"
-echo "    git commit -m 'deploy(assetlinks): real keystore fingerprint'"
-echo "    git push"
+echo "✅ Listo. Corré ahora, desde tu máquina (NO desde un sandbox que se exporte):"
+echo "   cd tango-cifrado-apk"
+echo "   ../scripts/apk/generate-keystore.sh"
+echo "   ../scripts/apk/generate-assetlinks.sh"
+echo "   git add .well-known/assetlinks.json pwa/.well-known/assetlinks.json"
+echo "   git commit -m 'deploy(assetlinks): real keystore fingerprint'"
+echo "   git push"
