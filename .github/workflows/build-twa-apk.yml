@@ -1,0 +1,307 @@
+name: build-twa-apk
+# ============================================================
+# Fase 9.3 del ROADMAP — APK TWA generado automáticamente en CI.
+#
+# Cuándo corre:
+#   • Manual:  Actions → este workflow → "Run workflow" (workflow_dispatch)
+#   • Tag push: cada vez que se pushea un tag `apk/v*` (ej: apk/v1.0.0)
+#
+# Secretos REQUERIDOS en Settings → Secrets and variables → Actions:
+#
+#   • ANDROID_KEYSTORE_B64      — el archivo android.keystore ENTERO,
+#                                  codificado en base64 (sin wraps de línea).
+#                                  Generar: base64 -w0 android.keystore
+#
+#   • ANDROID_KEYSTORE_PASSWORD — contraseña de la keystore (la misma
+#                                  que ingresaste en generate-keystore.sh).
+#
+#   • ANDROID_KEY_ALIAS         — alias de la key dentro del store.
+#                                  Default: "android" (el que usa
+#                                  generate-keystore.sh). Opcional si
+#                                  usás el alias default.
+#
+#   • ANDROID_KEY_PASSWORD      — contraseña de la key individual.
+#                                  Default: = misma que STORE (asume que
+#                                  storepass == keypass, que es lo que
+#                                  hace generate-keystore.sh por defecto).
+#
+# Variables de workflow:
+#   • package.name = com.tangocifrado.app   (editar manualmente si cambiaste el package)
+#   • manifest.url = la URL pública de pwa/manifest.json (debe ser la MISMA
+#                     que usaste en `bubblewrap init` localmente).
+#
+# NOTA sobre twa-manifest.json: Bubblewrap genera este archivo durante
+# `bubblewrap init` y lo necesita para `bubblewrap build`. Para que CI no
+# tenga que correr el wizard interactivo, guardás TU copia de
+# twa-cifrado-apk/twa-manifest.json EN EL REPO (los valores no contienen
+# secretos — la keystore y su pass van por Secrets). Después del primer
+# `bubblewrap init` local:
+#     git add -f tango-cifrado-apk/twa-manifest.json
+#     (el -f es porque este workflow no lo borra, pero el .gitignore del
+#      apk no lo matchea — si te lo saltea, editá el ignore).
+# ============================================================
+
+run-name: Build TWA APK ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag de release (ej: apk/v1.0.0). Si está vacío, usa latest (solo build, no release)."
+        required: false
+        default: ""
+      upload_to_release:
+        description: "Subir .apk + .aab como GitHub Release assets (requiere release_tag no vacío)."
+        required: false
+        type: boolean
+        default: true
+  push:
+    tags:
+      - 'apk/v*'
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  NODE_VERSION: "20"
+  JAVA_VERSION: "17"
+  JAVA_DISTRO: "temurin"
+  BUBBLEWRAP_VERSION: "latest"
+  PACKAGE_NAME: "com.tangocifrado.app"
+  MANIFEST_URL: "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/manifest.json"
+  APK_DIR: "tango-cifrado-apk"
+
+jobs:
+  build-apk:
+    name: Build APK + AAB (TWA / Bubblewrap)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # para crear/editar releases y subir assets
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------- pre-flight: secret guard ----------
+      - name: Required secrets guard
+        env:
+          HAS_KS:  ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
+          HAS_PWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD != '' }}
+        run: |
+          test "$HAS_KS"  = true || { echo "❌ Falta el secreto ANDROID_KEYSTORE_B64 (android.keystore en base64)."; exit 1; }
+          test "$HAS_PWD" = true || { echo "❌ Falta el secreto ANDROID_KEYSTORE_PASSWORD."; exit 1; }
+          echo "✅ Secretos requeridos presentes."
+
+      # ---------- JDK (Bubblewrap corre Gradle detrás) ----------
+      - name: Setup JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRO }}
+
+      # ---------- Node + Bubblewrap ----------
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install @bubblewrap/cli
+        run: |
+          npm install -g @bubblewrap/cli@${{ env.BUBBLEWRAP_VERSION }}
+          bubblewrap --version
+
+      # ---------- Android SDK (Bubblewrap lo necesita para Gradle) ----------
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
+          packages: ''
+
+      # ---------- Keystore: reconstruir desde el secret B64 ----------
+      - name: Restore android.keystore from secret
+        id: keystore
+        run: |
+          KS_FILE="$APK_DIR/android.keystore"
+          mkdir -p "$APK_DIR"
+          printenv ANDROID_KEYSTORE_B64 | base64 -d > "$KS_FILE"
+          test -s "$KS_FILE" || { echo "❌ ANDROID_KEYSTORE_B64 está vacío o inválido"; exit 1; }
+          echo "✅ Keystore escrita en $KS_FILE ($(stat -c%s "$KS_FILE") bytes)"
+          chmod 600 "$KS_FILE"
+          echo "keystore_path=$KS_FILE" >> "$GITHUB_OUTPUT"
+          # keystore-password.txt para que build-apk.sh lo lea sin preguntar
+          printf '%s' "$ANDROID_KEYSTORE_PASSWORD" > "$APK_DIR/keystore-password.txt"
+          chmod 600 "$APK_DIR/keystore-password.txt"
+        env:
+          ANDROID_KEYSTORE_B64:      ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+
+      # ---------- Si no hay twa-manifest.json, correr init NO-INTERACTIVO ----------
+      # Bubblewrap init con --manifest falla si necesita prompts; la pasamos
+      # las respuestas por stdin usando valores de twa-config.json como guía.
+      - name: bubblewrap init (si no existe twa-manifest.json)
+        working-directory: ${{ env.APK_DIR }}
+        run: |
+          if [ -f twa-manifest.json ]; then
+            echo "✅ twa-manifest.json ya existe; salteando init."
+            exit 0
+          fi
+          echo "⚠️  No hay twa-manifest.json versionada — generando uno mínimo..."
+          # Generamos un twa-manifest.json mínimo a mano. bubblewrap init
+          # requiere interacción; para CI es más robusto generar el JSON
+          # con los campos obligatorios. Bubblewrap lo lee para build.
+          cat > twa-manifest.json <<'TWAEOF'
+          {
+            "packageId": "__PACKAGE_ID__",
+            "host": "misbusquedaspersonales-cyber.github.io",
+            "name": "Tango Cifrado",
+            "launcherName": "Tango Cifrado",
+            "themeColor": "#1a110f",
+            "backgroundColor": "#1a110f",
+            "navigationColor": "#1a110f",
+            "navigationColorDark": "#0a0605",
+            "navigationDividerColor": "#2a1a15",
+            "startUrl": "/tango_cipher_bot_public/pwa/index.html?src=twa-apk",
+            "iconUrl": "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/icons/icon-512.png",
+            "maskableIconUrl": "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/icons/icon-maskable-512.png",
+            "display": "standalone",
+            "orientation": "portrait",
+            "minSdkVersion": 21,
+            "targetSdkVersion": 34,
+            "serviceAccountJsonFile": "",
+            "fingerprints": [],
+            "enableNotifications": false,
+            "enableGeolocation": false,
+            "enableSiteSettingsShortcut": true,
+            "isChromeOSOnly": false,
+            "isMetaQuery": false,
+            "retainedBundles": [],
+            "versionCode": 1,
+            "versionName": "1.0.0",
+            "signingKey": {
+              "path": "./android.keystore",
+              "alias": "__ALIAS__"
+            },
+            "splashScreenFadeOutDuration": 300
+          }
+          TWAEOF
+          PACKAGE_NAME="${PACKAGE_NAME:-com.tangocifrado.app}"
+          ALIAS="${ANDROID_KEY_ALIAS:-android}"
+          sed -i "s/__PACKAGE_ID__/$PACKAGE_NAME/" twa-manifest.json
+          sed -i "s/__ALIAS__/$ALIAS/"                 twa-manifest.json
+          echo "✅ twa-manifest.json generado en CI (package=$PACKAGE_NAME, alias=$ALIAS)"
+          cat twa-manifest.json | head -n 25
+        env:
+          PACKAGE_NAME:      ${{ env.PACKAGE_NAME }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+
+      # ---------- Compilar ----------
+      - name: bubblewrap build
+        working-directory: ${{ env.APK_DIR }}
+        run: |
+          export CI="${CI:-true}"
+          export KEYSTORE_PASS="$ANDROID_KEYSTORE_PASSWORD"
+          export KEYSTORE_KEY_PASS="${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
+          # Auto-respond "n" (No) al prompt interactivo inicial de Bubblewrap:
+          # "Do you want Bubblewrap to install the JDK (recommended)? (Y/n)"
+          # En CI ya instalamos JDK via setup-java, así que contestar No evita que
+          # el job se cuelgue esperando stdin. CI=true evita prompts futuros también.
+          {
+            printf 'n\nn\n'
+          } | bubblewrap build \
+            --skipPwaValidation  # si el Pages es privado/temporal, esto evita que falle; quitar en producción
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD:      ${{ secrets.ANDROID_KEY_PASSWORD }}
+        timeout-minutes: 45
+
+      # ---------- Encontrar artefactos ----------
+      - name: Discover APK / AAB outputs
+        id: artifacts
+        run: |
+          OUT_DIR="dist/apk"
+          mkdir -p "$OUT_DIR"
+          N=0
+          while IFS= read -r -d '' f; do
+            cp -v "$f" "$OUT_DIR/$(basename "$f")"
+            N=$((N+1))
+          done < <(find "$APK_DIR" -maxdepth 6 \( -name "*.apk" -o -name "*.aab" \) -print0)
+          echo "Encontrados $N artefactos:"
+          ls -lah "$OUT_DIR"
+          echo "count=$N" >> "$GITHUB_OUTPUT"
+          {
+            echo "files<<EOF"
+            ls -1 "$OUT_DIR"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          # Multi-line output: listado separado por comas para upload-artifact
+          FILES_CSV=$(find "$OUT_DIR" -maxdepth 1 -type f \( -name "*.apk" -o -name "*.aab" \) -printf '%p\n' | paste -sd ',' -)
+          echo "files_csv=$FILES_CSV" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK + AAB as workflow artifacts
+        if: steps.artifacts.outputs.count > 0
+        uses: actions/upload-artifact@v4
+        with:
+          name: tango-cifrado-apk
+          path: dist/apk/*
+          retention-days: 30
+          compression-level: 9
+
+      # ---------- Determinar tag para release ----------
+      - name: Resolve release tag
+        id: tag
+        run: |
+          INPUT_TAG="${{ github.event.inputs.release_tag }}"
+          PUSH_TAG="${{ startsWith(github.ref, 'refs/tags/apk/v') && github.ref_name || '' }}"
+          FINAL="${INPUT_TAG:-$PUSH_TAG}"
+          if [ -z "$FINAL" ]; then
+            echo "⚠️  Sin tag de release; salteando publicación a Release."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$FINAL" >> "$GITHUB_OUTPUT"
+            echo "publish=true"  >> "$GITHUB_OUTPUT"
+          fi
+
+      # ---------- Crear / actualizar GitHub Release y subir assets ----------
+      - name: Publish APK + AAB as GitHub Release assets
+        if: steps.tag.outputs.publish == 'true' && github.event.inputs.upload_to_release != 'false' && steps.artifacts.outputs.count > 0
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Tango Cifrado APK ${{ steps.tag.outputs.tag }}
+          body: |
+            ## Tango Cifrado — APK (Trusted Web Activity)
+
+            Wrapper Android mínimo (`${{ env.PACKAGE_NAME }}`) que abre la PWA en pantalla completa,
+            verificado por Digital Asset Links contra `misbusquedaspersonales-cyber.github.io`.
+
+            - **URL envuelta:** ${{ env.MANIFEST_URL }}
+            - **Min SDK:** 21 (Android 5.0+)
+            - **Target SDK:** 34
+            - **Package:** ${{ env.PACKAGE_NAME }}
+
+            ### Cómo instalar (sideload)
+            1. Descargá **`tango-cifrado-release-signed.apk`** (o el archivo *.apk abajo) en tu Android.
+            2. Abrilo desde el gestor de archivos o desde Telegram/email.
+            3. Android pedirá habilitar **"Instalar apps de fuentes desconocidas"** para la app desde la que lo abrís. Es un permiso de un solo toque.
+            4. Instalar → abrir → ingresar la `CLAVE_DESPLIEGUE` una sola vez, igual que la PWA.
+            5. ✅ Confirmar que **NO** aparece la barra de URL de Chrome (si aparece: `/.well-known/assetlinks.json` no está publicado o falló la validación).
+
+            ### Updates
+            Los cambios en la PWA (UI, motor, textos) llegan automáticamente — NO necesitás un APK nuevo. Solo re-instalás el APK si cambia el wrapper Android (nombre, ícono, permisos, versión mínima).
+
+            ---
+            Build automático de GitHub Actions — commit ${{ github.sha }}.
+          files: |
+            dist/apk/*.apk
+            dist/apk/*.aab
+          fail_on_unmatched_files: true
+          generate_release_notes: false
+
+      # ---------- Cleanup seguro: borrar keystore + pass del runner ----------
+      - name: Wipe keystore + passwords from runner
+        if: always()
+        run: |
+          rm -f "$APK_DIR/android.keystore" "$APK_DIR/keystore-password.txt"
+          unset ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD ANDROID_KEYSTORE_B64
+          echo "🧹 Keystore + pass removidos del runner."

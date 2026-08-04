@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.tangocifrado.app",
+      "sha256_cert_fingerprints": [
+        "13:E4:E0:6B:02:33:E1:67:BC:AD:C9:11:FE:78:9B:B6:7D:39:7C:8C:CA:1B:79:22:11:6D:CB:6D:A9:52:39:8B"
+      ]
+    }
+  }
+]

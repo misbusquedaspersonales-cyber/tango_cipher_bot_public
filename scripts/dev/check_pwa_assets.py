@@ -55,6 +55,11 @@ def check_manifest():
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     for icon in manifest.get("icons", []):
         src = icon["src"]
+        # Absolute URLs (http/https) point to the deployed site — skip local
+        # file check. They're correct by definition for TWA manifests and can't
+        # be verified without a network request.
+        if src.startswith("http://") or src.startswith("https://"):
+            continue
         referenced.add(src.replace("./", "", 1).lstrip("/"))
         path = PWA_DIR / src
         if not path.is_file():

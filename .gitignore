@@ -10,8 +10,15 @@ __pycache__/
 venv/
 .env
 
-# Node
-node_modules/
+# APK build — keystore and password must NEVER be committed
+tango-cifrado-apk/android.keystore
+tango-cifrado-apk/keystore-password.txt
+# Build logs and intermediate Gradle/SDK artifacts
+_build_apk_logs/
+tango-cifrado-apk/app/
+tango-cifrado-apk/.gradle/
+tango-cifrado-apk/android/
+dist/apk/
 
 # OS cruft
 .DS_Store
