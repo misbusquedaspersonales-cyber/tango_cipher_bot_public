@@ -42,7 +42,7 @@ Una vez que el flujo de contenido (texto + imágenes) está estable, automatizar
 ## Fase 2: Ampliación del Corpus 🔄 En progreso
 - [x] Ampliar `tangos.json` de 2 a 7 tangos (versos auténticos + padding técnico marcado con `"padding": true`)
 - [ ] Continuar agregando tangos hasta cubrir vocabulario español común (~20+ tangos)
-- [?] Script utilitario para verificar cobertura de palabras contra un texto de prueba — `scripts/check_coverage.py` y `tests/test_check_coverage.py` están referenciados en el CHANGELOG pero los archivos fuente no existen en el repo; solo queda bytecode `.pyc`. Ver `TO_FIX.md` F-5.
+- [x] Script utilitario para verificar cobertura de palabras contra un texto de prueba — `scripts/dev/check_coverage.py` + `tests/python/test_check_coverage.py`. Recreados (los originales nunca fueron commiteados). 11 tests, 11/11 pass.
 
 ## Fase 3: Arquitectura de Doble Repositorio ✅ Pipeline implementado
 La base de datos (`tangos.json`) y el `SALT` nunca se exponen en el repo público.
