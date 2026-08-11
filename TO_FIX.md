@@ -48,7 +48,7 @@
 
 ### [ ] P4-2: `app.js` Mixes Three Distinct Concerns in One 500+ Line File
 
-- **File**: `pwa/app.js` — currently **629 lines** (threshold of ~600 is met as of 2026-08-01).
+- **File**: `pwa/app.js` — currently **732 lines** (was 629 on 2026-08-01, grown ~100 lines since without the split happening).
 - **Problem**: The file handles vault orchestration, the full UI state machine, and Telegram delivery together. It will become hard to navigate as it grows.
 - **Proposed split**:
   ```
@@ -64,7 +64,7 @@
     app.js              ← boot sequence only: init(), resolve vault mode, delegate to screens
   ```
 - **Key boundary**: `core/` has zero DOM references; `ui/` has zero crypto logic.
-- **Note**: `pwa/app.js` is at 629 lines as of 2026-08-01 — the "~600 lines, revisit then" trigger condition is met.
+- **Note**: `pwa/app.js` was 629 lines on 2026-08-01 when the "~600 lines, revisit" trigger was first hit. Now at 732 lines — the split is overdue. Scheduled before Fase 10.2 (image sending) in the ROADMAP priority order.
 
 ---
 
