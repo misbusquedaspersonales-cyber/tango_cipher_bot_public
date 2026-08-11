@@ -24,7 +24,8 @@ deliberately exempted from the reverse check -- a license text is never
 "referenced" by the HTML, and the bundle JSON is loaded by fetch() at
 runtime, not by a static @font-face/<link>/SHELL_FILES.
 
-Run this locally before any PR that touches pwa/, and wire it into CI.
+Run this locally before any PR that touches pwa/. CI runs it automatically
+via .github/workflows/check-pwa-assets.yml.
 
 Usage:
     python3 scripts/check_pwa_assets.py

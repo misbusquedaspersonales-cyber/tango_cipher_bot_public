@@ -1,5 +1,35 @@
 # ROADMAP — Sistema de Cifrado por Tangos
 
+## Orden de desarrollo — qué hacer y por qué en este orden
+
+El orden siguiente está fijado por dependencias técnicas y por impacto en el usuario real. No se trata de preferencias: cada ítem es prerequisito del siguiente.
+
+### 1. Fase 10.1 — Chunking de mensajes largos (PRÓXIMO)
+El cliente ya tiene el APK instalado y está usando la app. El primer artículo largo que intente enviar va a chocar con el límite de 4096 caracteres de Telegram y verá un error. Es el bloqueo más inmediato. El fix es una sola función en `app.js` (~40 líneas) y no tiene dependencias pendientes.
+
+### 2. Fase 2 — Ampliación del corpus (continua, en paralelo)
+Con solo 7 tangos, muchas palabras comunes caen al fallback XOR hex, que es criptográficamente más débil que las coordenadas de libro. Agregar tangos mejora la cobertura directamente. Es trabajo de contenido, no de código — se puede hacer en paralelo con cualquier otra fase.
+
+### 3. P4-2 — Split de `app.js` en `core/` y `ui/`
+`app.js` está en 732 líneas y sigue creciendo. Antes de agregar el selector de imágenes (Fase 10.2) hay que hacer este split, o el archivo se vuelve inmanejable. El split también resuelve F-6 (extracción de `deeplink.js`) de forma natural.
+
+### 4. Verificar que el deep link abre el APK instalado, no el navegador
+El botón "Descifrar →" en Telegram debería abrir el APK directamente. Si `assetlinks.json` no está correctamente verificado, abre una pestaña de Chrome en su lugar, rompiendo la experiencia nativa. Verificar y corregir antes de agregar más features que dependan del flujo de recepción.
+
+### 5. Fase 10.2 — Envío de imágenes (sin cifrar)
+Una vez que `app.js` está dividido, agregar el selector de archivos y `sendPhoto`/`sendMediaGroup` es trabajo limpio y acotado. Las imágenes viajan sin cifrar en esta fase — eso es intencional y se documenta en la UI.
+
+### 6. Fase 10.3 — Cifrado de imágenes
+Completa el modelo de seguridad para mensajes con imágenes. Se hace después de 10.2, no antes — el diseño correcto depende de la experiencia real de uso de 10.2.
+
+### 7. Fase 9.3 — CI: APK generado automáticamente en cada release
+Una vez que el flujo de contenido (texto + imágenes) está estable, automatizar la generación del APK en GitHub Actions para que el cliente siempre descargue la última versión desde una URL fija.
+
+### Lo que NO se hace (y por qué)
+**Transporte propio (app-to-app sin Telegram):** requiere un servidor propio o WebRTC P2P — rompe el costo $0, agrega infraestructura que hay que mantener, y resuelve un problema que no existe. El envío actual ya es silencioso (no abre Telegram). El único punto de fricción real es que el botón "Descifrar →" abra el navegador en lugar del APK, que se resuelve en el punto 4 de arriba.
+
+---
+
 ## Fase 1: Fundación (Python CLI) ✅ Completado
 - [x] `tangos.json` con corpus base de tangos clásicos
 - [x] `cipher_engine.py` — cifrado/descifrado con coordenadas V/P, SALT dinámico via `_resolve_salt()`, fallback XOR hex, round-trip lossless (capitalización + puntuación + dígitos)
@@ -150,7 +180,7 @@ Esto reduciría la fricción para el caso en que el usuario quiere mandar el tex
 
 **Si se implementa:** los botones deben mostrar su estado actual en el label (ej: "Copiar mensaje" vs "Copiar cifrado") y deshabilitarse visualmente cuando no hay nada que copiar/enviar.
 
-## Fase 9: Distribución como APK Android (TWA) 📦 No implementado
+## Fase 9: Distribución como APK Android (TWA) � Parcialmente completado
 
 ### Contexto
 
@@ -168,21 +198,25 @@ Ventajas para este proyecto:
 
 ### Lo que hay que construir
 
-#### Fase 9.1 — APK básico con TWA
-- [ ] Crear proyecto Android mínimo con la dependencia `androidx.browser:browser` (CustomTabs/TWA).
-- [ ] Configurar `LauncherActivity` apuntando a `https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html`.
-- [ ] Generar `assetlinks.json` y publicarlo en `pwa/.well-known/assetlinks.json` en GitHub Pages (requerido por TWA para verificación de origen — sin esto el wrapper cae a Chrome con barra de URL visible).
-- [ ] Firmar el APK con una keystore propia (`keytool` + `apksigner`). Guardar la keystore de forma segura — perderla impide publicar updates.
-- [ ] Probar instalación por sideload: enviar el `.apk` por Telegram/WhatsApp/email → receptor activa "Instalar apps de fuentes desconocidas" → instala → ícono en Home Screen.
+#### Fase 9.1 — APK básico con TWA ✅ Completado
+- [x] Proyecto TWA en `tango-cifrado-apk/` con `twa-manifest.json` configurado.
+- [x] `LauncherActivity` apuntando a `https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html`.
+- [x] `assetlinks.json` publicado en `pwa/.well-known/assetlinks.json`.
+- [x] Keystore generada fuera del repo en `~/tango-signing/` (nunca comprometida).
+- [x] Scripts de build: `scripts/apk/build-apk.sh`, `generate-keystore.sh`, `generate-assetlinks.sh`, `install-deps.sh`.
+- [x] APK firmado generado en `dist/apk/app-release-signed.apk` (1.1 MB).
+- [x] Distribución por sideload probada — APK enviado al cliente por email e instalado.
 
-#### Fase 9.2 — Icono, nombre y metadata Android
-- [ ] `AndroidManifest.xml`: nombre de app "Tango Cifrado", ícono adaptativo (usar los `icon-192.png` / `icon-maskable-512.png` ya existentes en `pwa/icons/`).
-- [ ] Splash screen con el color `#1a110f` (igual que la PWA) para evitar flash blanco al abrir.
-- [ ] `versionCode` / `versionName` sincronizados con el CHANGELOG para poder rastrear qué versión tiene cada dispositivo.
+#### Fase 9.2 — Icono, nombre y metadata Android ✅ Completado
+- [x] Nombre de app "Tango Cifrado" configurado en `twa-manifest.json`.
+- [x] Ícono tomado de `pwa/icons/icon-512.png` e `icon-maskable-512.png`.
+- [x] Colores de splash/theme (`#1a110f`) sincronizados con la PWA.
+- [x] `versionCode: 1` / `versionName: "1.0.0"` en `twa-manifest.json`.
 
-#### Fase 9.3 — CI: APK generado automáticamente en cada release
-- [ ] GitHub Actions workflow en el repo privado o público que buildea el APK con Gradle y lo sube como release asset a GitHub Releases.
-- [ ] El receptor siempre descarga la última versión desde la URL del release — sin necesidad de reenviar el archivo manualmente.
+#### Fase 9.3 — CI: APK generado automáticamente en cada release ❌ No implementado
+- [x] `.github/workflows/build-twa-apk.yml` existe — el workflow está definido.
+- [ ] Verificar que el workflow funciona end-to-end en GitHub Actions (la keystore debe estar disponible como secret en el repo, o el workflow usa sideload manual).
+- [ ] Subir el APK como release asset a GitHub Releases en cada tag — así el cliente siempre descarga la última versión desde una URL fija sin necesidad de reenviar el archivo manualmente.
 
 ### Consideraciones
 
@@ -190,3 +224,73 @@ Ventajas para este proyecto:
 - **Sideload en Android:** el receptor debe habilitar "Instalar apps de fuentes desconocidas" en Ajustes → Seguridad (o en Ajustes de la app desde donde abre el APK, dependiendo de la versión de Android). Es un paso de un solo click pero hay que instruirlo.
 - **iOS:** TWA es exclusiva de Android. Para iOS la única opción nativa sin App Store es la instalación PWA desde Safari (Compartir → Agregar a pantalla de inicio), que es más visible en Safari que en Chrome móvil. No hay equivalente a sideload en iOS.
 - **Updates:** como la TWA apunta a la URL de GitHub Pages, cualquier cambio en la PWA llega automáticamente sin resubir el APK. Solo hay que subir un APK nuevo cuando cambia el wrapper Android (nombre, ícono, permisos, versión mínima de Android).
+
+## Fase 10: Mensajes Largos e Imágenes ❌ No implementado
+
+### Objetivo
+
+Permitir enviar artículos completos (texto largo) e imágenes por Telegram desde la PWA. Las imágenes viajan sin cifrar en esta primera iteración — la prioridad es que lleguen. El texto sigue cifrado como siempre.
+
+### Fase 10.1 — Mensajes de texto largos (chunking automático)
+
+**Problema actual:** `enviarATelegram()` en `app.js` rechaza mensajes cifrados de más de 4096 caracteres con un error visible al usuario. Telegram no acepta mensajes de texto más largos — es un límite de la API, no configurable.
+
+**Diseño propuesto:**
+
+1. Si el mensaje cifrado supera 4096 chars, dividirlo en chunks respetando el límite. Cada chunk se envía como un `sendMessage` separado al mismo `chat_id`.
+2. Solo el último chunk lleva el `inline_keyboard` con el botón "Descifrar →" — los anteriores son texto plano sin botón, para que el receptor sepa que hay más partes antes de ese botón.
+3. El deep link del botón en el último chunk apunta a `#c=<ciphertext completo urlencoded>` — el ciphertext **no** se divide: el fragmento contiene el código cifrado entero. Esto significa que el botón del último chunk funciona exactamente igual que hoy (pre-carga el campo Descifrar con el código completo).
+4. Los chunks se envían secuencialmente (no en paralelo) para preservar el orden de llegada en Telegram.
+
+**Detalle de chunking:**
+- El corte debe hacerse en límites de token del cifrado (los `-` separadores), nunca en el medio de un token, para que el receptor no confunda chunks intermedios con códigos cifrados parciales.
+- Cada chunk lleva un prefijo `[1/N]`, `[2/N]`, etc. para que el receptor sepa que el mensaje es multiparte.
+
+**Cambios necesarios:**
+- `app.js` — `enviarATelegram()`: reemplazar el `throw` de longitud por la lógica de chunking. Extraer como función pura `chunkCipherText(codigo, maxLen)` para que sea testeable.
+- `app.js` — `handleSend()`: el status de "Enviado" debe reflejar cuántos chunks se enviaron (`"Enviado en 3 partes."`) si fueron más de uno.
+- `TO_FIX.md`: cerrar el item implícito de "large messages" una vez implementado.
+
+**Consideración de seguridad:** los chunks intermedios contienen fragmentos del ciphertext en texto plano en Telegram. Esto no rompe el cifrado (el ciphertext ya estaba en Telegram de todas formas en mensajes cortos), pero expone el tamaño aproximado del mensaje original. Aceptable para el caso de uso actual.
+
+---
+
+### Fase 10.2 — Envío de imágenes (sin cifrar, primera iteración)
+
+**Objetivo:** adjuntar una o más imágenes al mensaje cifrado. Las imágenes viajan sin cifrar — el receptor las ve directamente en Telegram. La información sensible sigue yendo en el texto cifrado; las imágenes son material de contexto (artículos, capturas, documentos escaneados).
+
+**Diseño propuesto:**
+
+1. Agregar un campo `<input type="file" accept="image/*" multiple>` en el compositor, visible solo en modo Cifrar.
+2. Al hacer "Enviar a Telegram", si hay imágenes seleccionadas:
+   - Primero enviar el texto cifrado (con chunking si corresponde, Fase 10.1).
+   - Luego enviar cada imagen con `sendPhoto` (una por llamada) o un `sendMediaGroup` si son varias. El caption de la primera imagen puede llevar el botón "Descifrar →" como alternativa al último chunk de texto — a definir en la implementación.
+3. Las imágenes se leen como `File` objects del input y se suben directamente a la Bot API como `multipart/form-data` — sin pasar por ningún servidor propio.
+
+**Limitaciones de Telegram a respetar:**
+- `sendPhoto`: imagen hasta 10 MB, dimensiones hasta 10000px por lado, suma de ancho+alto ≤ 10000px.
+- `sendDocument`: hasta 50 MB — alternativa para imágenes grandes o PDFs (sin compresión de Telegram).
+- `sendMediaGroup`: hasta 10 archivos por grupo.
+
+**Cambios necesarios:**
+- `pwa/index.html`: agregar el `<input type="file">` y el área de preview de miniaturas.
+- `app.js`: `enviarATelegram()` necesita recibir opcionalmente un array de `File`. Candidato natural a extraerse a `core/telegram.js` una vez que se haga el split de P4-2 — implementar pensando en esa separación.
+- `app.js`: `handleSend()` orquesta texto + imágenes secuencialmente.
+- El botón "Enviar" debe mostrar progreso cuando hay varios archivos (`"Enviando imagen 2 de 3…"`).
+
+**Consideración de seguridad:** las imágenes viajan sin cifrar por la infraestructura de Telegram. El receptor y cualquier admin de Telegram con acceso al chat las pueden ver. Documentar esto claramente en la UI (un texto pequeño junto al selector de imágenes: "Las imágenes se envían sin cifrar.").
+
+**Orden de desarrollo:** el cifrado de imágenes es un paso separado que viene después, en Fase 10.3. Fase 10.2 resuelve exclusivamente la infraestructura de envío (selector de archivos, `sendPhoto`/`sendMediaGroup`, progreso). No mezclar los dos problemas: el envío de imágenes sin cifrar es útil por sí solo y es el prerequisito necesario para poder cifrarlas después.
+
+---
+
+### Fase 10.3 — Cifrado de imágenes (paso siguiente a 10.2, no opcional)
+
+**Prerequisito:** Fase 10.2 completada y en uso real.
+
+Esta fase completa el modelo de seguridad para mensajes con imágenes: después de que 10.2 resuelve el *cómo enviar*, 10.3 resuelve el *cómo proteger lo que se envía*.
+
+- Cifrar la imagen como blob binario → base64 → AES-GCM con la misma clave derivada de `CLAVE_DESPLIEGUE`, y enviarla como `sendDocument` con un nombre de archivo genérico (sin extensión reveladora).
+- El receptor descifra el blob en la PWA antes de mostrarlo — el flujo es análogo al descifrado de texto: botón "Descifrar imagen" junto a cada archivo recibido.
+- El tamaño de la imagen cifrada en base64 será ~33% mayor que el original — factor a tener en cuenta con el límite de 50 MB de `sendDocument`.
+- Diseñar la UI de descifrado de imágenes en esta fase, no antes — el diseño correcto depende de lo que la experiencia real de 10.2 revele sobre cómo los usuarios interactúan con las imágenes recibidas.

@@ -28,7 +28,7 @@
 - **Resolved 2026-08-01.**
 - `tests/vectors.json` — 11 shared test cases (6 deterministic, 3 `roundtrip_only`, 2 `error`) using the existing `BASE` fixture corpus. No dependency on `private_core/tangos.json`; safe to commit in the public repo.
 - `tests/python/test_cipher_engine.py` — `test_shared_vector` parametrized loop added.
-- `tests/js/cipherEngine.test.mjs` — matching `for` loop added. JS: 30/30 pass (19 original + 11 vectors).
+- `tests/js/cipherEngine.test.mjs` — matching `for` loop added. JS: 27 tests (16 fixed + 11 shared-vector loop). Note: `deeplink.test.mjs` (9 tests) and `pwa_e2e.test.mjs` (3 tests) were added later for Fase 7 — total JS is 39, not 30. Grand total with `private_core/` populated: 95 (39 JS + 13 Python always-run + 43 Python needing `private_core/`).
 - `.github/workflows/vector-drift-guard.yml` — CI guard: warns on PRs that edit `tests/vectors.json` without also touching `pwa/cipherEngine.js`.
 
 ---
