@@ -211,23 +211,36 @@ La gestión de credenciales en el browser está implementada en `secure-vault.js
 
 **Aperturas posteriores (uso diario):**
 1. `loadPayloadDirect()` → carga `{ tangos, salt }` desde IndexedDB.
-2. Cifrar con `cifrarMensaje()` (recordar `await` — es async) y enviar a Telegram:
+2. Cifrar con `cifrarMensaje()` (recordar `await` — es async) y enviar a Telegram via `enviarATelegram()`:
 
 ```javascript
-async function enviarATelegram(mensajeCifrado, botToken, chatId) {
-    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-    const resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text: mensajeCifrado })
-    });
-    if (!resp.ok) throw new Error(`Telegram error: ${resp.status}`);
-}
+// enviarATelegram() está en app.js. Usa chunkCipherText() de deeplink.js
+// para dividir automáticamente mensajes que superan el límite de 4096 chars.
+// Solo el último chunk lleva el botón "Descifrar →" con el ciphertext completo
+// en el fragmento (#c=...) para que el receptor pueda descifrar en un tap.
+// Retorna el número de chunks enviados (1 para mensajes cortos).
 
-// Ejemplo de uso completo (dentro de un handler async):
-const { tangos, salt } = await loadPayloadDirect();
-const mensajeCifrado = await cifrarMensaje(idTango, mensaje, tangos, salt);
-await enviarATelegram(mensajeCifrado, botToken, chatId);
+import { chunkCipherText, buildDeepLink, buildSendMessageBody } from './deeplink.js';
+
+async function enviarATelegram(mensajeCifrado, botToken, chatId) {
+    const chunks = chunkCipherText(mensajeCifrado, 4096);
+    const deepLink = buildDeepLink(location.origin, location.pathname, location.search, mensajeCifrado);
+    const apiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+
+    for (let i = 0; i < chunks.length; i++) {
+        const isLast = i === chunks.length - 1;
+        const body = isLast
+            ? buildSendMessageBody(chunks[i], chatId, deepLink)
+            : { chat_id: chatId, text: chunks[i] };
+        const resp = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!resp.ok) throw new Error(`Telegram error ${resp.status} (parte ${i + 1}/${chunks.length})`);
+    }
+    return chunks.length;
+}
 ```
 
-> Si se requiere protección at-rest del dispositivo, reemplazar `savePayloadDirect`/`loadPayloadDirect` por `sealForDevice`/`openDeviceVault` (PIN-gated). Ver comentarios en `secure-vault.js`.
+> Ver `pwa/deeplink.js` para `chunkCipherText`, `buildDeepLink` y `buildSendMessageBody`. Ver `pwa/secure-vault.js` para `sealForDevice`/`openDeviceVault` (PIN-gated, opt-in).

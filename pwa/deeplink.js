@@ -56,7 +56,62 @@ export function buildDeepLink(origin, pathname, search, ciphertext) {
 }
 
 /**
- * Builds the JSON body for a Telegram sendMessage call, including the
+ * Splits a ciphertext string into chunks that fit within maxLen characters,
+ * cutting only on token boundaries (the `-` separator in the wire format).
+ * Each chunk is prefixed with `[i/N] ` so the receiver knows how many parts
+ * to expect. The deep-link button ("Descifrar →") is only attached to the
+ * last chunk — it carries the full ciphertext in its fragment so decryption
+ * works in one tap regardless of how many parts were sent.
+ *
+ * Cutting on token boundaries (not mid-character) is important because:
+ *   - It prevents the receiver from confusing a partial chunk with a valid
+ *     (but wrong) ciphertext and getting a misleading decrypt error.
+ *   - The token grammar uses `-` exclusively as a separator, never inside a
+ *     token, so splitting there is always safe.
+ *
+ * @param {string} codigo  - full ciphertext (e.g. "50-V01P02-~20-V01P03-…")
+ * @param {number} maxLen  - maximum characters per chunk including the prefix
+ * @returns {string[]}     - array of prefixed chunk strings, length >= 1
+ */
+export function chunkCipherText(codigo, maxLen = 4096) {
+    // Fast path: fits in one message — no prefix needed, no split.
+    if (codigo.length <= maxLen) return [codigo];
+
+    // Split into tokens on the `-` separator.
+    const tokens = codigo.split("-");
+
+    // First pass: group tokens into raw chunks (without prefix yet).
+    // We'll add the prefix in a second pass once we know N, because the
+    // prefix length "[10/10] " depends on the total chunk count.
+    // To be safe we reserve prefix room upfront using the worst-case width
+    // "[99/99] " = 8 chars. Real messages will never reach 99 chunks, but
+    // this keeps the function correct for any input without two passes.
+    const PREFIX_RESERVE = 8; // "[99/99] "
+    const effectiveMax = maxLen - PREFIX_RESERVE;
+
+    const rawChunks = [];
+    let current = [];
+    let currentLen = 0; // length of current.join("-")
+
+    for (const token of tokens) {
+        // Length this token would add: token itself + separator before it (if not first)
+        const addLen = current.length === 0 ? token.length : 1 + token.length;
+        if (current.length > 0 && currentLen + addLen > effectiveMax) {
+            rawChunks.push(current.join("-"));
+            current = [token];
+            currentLen = token.length;
+        } else {
+            current.push(token);
+            currentLen += addLen;
+        }
+    }
+    if (current.length > 0) rawChunks.push(current.join("-"));
+
+    const n = rawChunks.length;
+    return rawChunks.map((chunk, i) => `[${i + 1}/${n}] ${chunk}`);
+}
+
+/**
  * inline_keyboard button that lets the receiver open the deep link.
  *
  * Using a url button in reply_markup (rather than a bare URL in the message

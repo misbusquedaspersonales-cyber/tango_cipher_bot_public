@@ -35,7 +35,7 @@
  */
 
 import { cifrarMensaje, descifrarMensaje } from "./cipherEngine.js";
-import { consumeDeepLink, buildDeepLink, buildSendMessageBody } from "./deeplink.js";
+import { consumeDeepLink, buildDeepLink, buildSendMessageBody, chunkCipherText } from "./deeplink.js";
 import {
     unlockDeployBundle,
     savePayloadDirect,
@@ -53,9 +53,9 @@ import {
 const TELEGRAM_CONFIG_KEY = "tango-cifrado:telegram-config";
 const VAULT_MODE_KEY = "tango-cifrado:vault-mode"; // 'direct' | 'pin'
 const BUNDLE_URL = "./encrypted-bundle.json";
-// Telegram's sendMessage caps text at 4096 UTF-8 characters -- checked
-// upfront so a long message fails with a clear reason instead of a bare
-// HTTP 400 after the user already hit "Enviar".
+// Telegram's sendMessage caps text at 4096 UTF-8 characters.
+// chunkCipherText() in deeplink.js uses this to split long ciphertexts
+// across multiple messages automatically.
 const TELEGRAM_MAX_LEN = 4096;
 
 // ---------- state ----------
@@ -140,34 +140,49 @@ async function setTelegramConfig(config) {
     }
 }
 
+/**
+ * Sends a ciphertext to Telegram, splitting into chunks if it exceeds
+ * TELEGRAM_MAX_LEN. Chunks are sent sequentially to preserve order.
+ * Only the last chunk carries the "Descifrar →" inline_keyboard button —
+ * its deep-link fragment holds the FULL ciphertext so the receiver can
+ * decrypt in one tap regardless of how many parts arrived.
+ *
+ * @returns {Promise<number>} number of chunks sent (1 for short messages)
+ */
 async function enviarATelegram(mensajeCifrado, botToken, chatId) {
-    if (mensajeCifrado.length > TELEGRAM_MAX_LEN) {
-        throw new Error(
-            `El mensaje cifrado mide ${mensajeCifrado.length} caracteres, ` +
-            `Telegram acepta un máximo de ${TELEGRAM_MAX_LEN}. Probá con un ` +
-            `mensaje más corto.`
-        );
-    }
-
+    const chunks = chunkCipherText(mensajeCifrado, TELEGRAM_MAX_LEN);
     const deepLink = buildDeepLink(location.origin, location.pathname, location.search, mensajeCifrado);
+    const apiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
 
-    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-    const resp = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildSendMessageBody(mensajeCifrado, chatId, deepLink)),
-    });
-    if (!resp.ok) {
-        let detalle = "";
-        try {
-            const body = await resp.json();
-            detalle = body && body.description ? body.description : "";
-        } catch {
-            // Telegram error responses are normally JSON; if parsing fails,
-            // fall back to the bare status below.
+    for (let i = 0; i < chunks.length; i++) {
+        const isLast = i === chunks.length - 1;
+        // Only the last chunk gets the deep-link button. Earlier chunks are
+        // plain text so the receiver can follow the conversation while waiting
+        // for all parts to arrive.
+        const body = isLast
+            ? buildSendMessageBody(chunks[i], chatId, deepLink)
+            : { chat_id: chatId, text: chunks[i] };
+
+        const resp = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+
+        if (!resp.ok) {
+            let detalle = "";
+            try {
+                const json = await resp.json();
+                detalle = json && json.description ? json.description : "";
+            } catch { /* fall through to bare status */ }
+            const partLabel = chunks.length > 1 ? ` (parte ${i + 1}/${chunks.length})` : "";
+            throw new Error(detalle
+                ? `Telegram${partLabel}: ${detalle}`
+                : `Telegram respondió con error ${resp.status}${partLabel}`);
         }
-        throw new Error(detalle ? `Telegram: ${detalle}` : `Telegram respondió con error ${resp.status}`);
     }
+
+    return chunks.length;
 }
 
 // ---------- vault mode (direct vs PIN-gated) ----------
@@ -376,11 +391,18 @@ async function handleSend() {
     const codigo = $("#send-row").dataset.cipherText;
     const button = $("#send-button");
     button.disabled = true;
-    setStatus(statusEl, "Enviando a Telegram…", "info");
+
+    // Show a progress hint for multi-part messages before the first fetch.
+    const totalChunks = chunkCipherText(codigo, TELEGRAM_MAX_LEN).length;
+    setStatus(statusEl,
+        totalChunks > 1 ? `Enviando parte 1 de ${totalChunks}…` : "Enviando a Telegram…",
+        "info");
 
     try {
-        await enviarATelegram(codigo, botToken, chatId);
-        setStatus(statusEl, "Enviado.", "success");
+        const sent = await enviarATelegram(codigo, botToken, chatId);
+        setStatus(statusEl,
+            sent > 1 ? `Enviado en ${sent} partes.` : "Enviado.",
+            "success");
     } catch (err) {
         setStatus(statusEl, err.message || "Error al enviar a Telegram.", "error");
     } finally {

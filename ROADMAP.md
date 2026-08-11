@@ -4,10 +4,10 @@
 
 El orden siguiente está fijado por dependencias técnicas y por impacto en el usuario real. No se trata de preferencias: cada ítem es prerequisito del siguiente.
 
-### 1. Fase 10.1 — Chunking de mensajes largos (PRÓXIMO)
-El cliente ya tiene el APK instalado y está usando la app. El primer artículo largo que intente enviar va a chocar con el límite de 4096 caracteres de Telegram y verá un error. Es el bloqueo más inmediato. El fix es una sola función en `app.js` (~40 líneas) y no tiene dependencias pendientes.
+### 1. Fase 10.1 — Chunking de mensajes largos ✅ Completado
+`chunkCipherText()` en `pwa/deeplink.js`. `enviarATelegram()` en `app.js` actualizado. 8 tests nuevos. 50/50 JS pass.
 
-### 2. Fase 2 — Ampliación del corpus (continua, en paralelo)
+### 2. Fase 2 — Ampliación del corpus (continua, en paralelo) ← PRÓXIMO
 Con solo 7 tangos, muchas palabras comunes caen al fallback XOR hex, que es criptográficamente más débil que las coordenadas de libro. Agregar tangos mejora la cobertura directamente. Es trabajo de contenido, no de código — se puede hacer en paralelo con cualquier otra fase.
 
 ### 3. P4-2 — Split de `app.js` en `core/` y `ui/`
@@ -231,27 +231,16 @@ Ventajas para este proyecto:
 
 Permitir enviar artículos completos (texto largo) e imágenes por Telegram desde la PWA. Las imágenes viajan sin cifrar en esta primera iteración — la prioridad es que lleguen. El texto sigue cifrado como siempre.
 
-### Fase 10.1 — Mensajes de texto largos (chunking automático)
+### Fase 10.1 — Mensajes de texto largos (chunking automático) ✅ Implementado
 
-**Problema actual:** `enviarATelegram()` en `app.js` rechaza mensajes cifrados de más de 4096 caracteres con un error visible al usuario. Telegram no acepta mensajes de texto más largos — es un límite de la API, no configurable.
+**Implementado en `pwa/deeplink.js` (`chunkCipherText`) y `pwa/app.js` (`enviarATelegram`, `handleSend`).**
 
-**Diseño propuesto:**
+- `chunkCipherText(codigo, maxLen=4096)` — función pura exportada desde `deeplink.js`. Corta en límites de token (`-`), reserva 8 chars para el prefijo `[i/N]`. Fast-path: si el mensaje cabe en un mensaje, devuelve el array con el string original sin prefijo.
+- `enviarATelegram()` — envía los chunks secuencialmente. Solo el último lleva el `inline_keyboard` con "Descifrar →"; su deep-link apunta al ciphertext **completo**, no al chunk.
+- `handleSend()` — muestra progreso ("Enviando parte 1 de 3…") y resultado ("Enviado en 3 partes.").
+- 8 tests nuevos en `deeplink.test.mjs`. 50/50 JS pass.
 
-1. Si el mensaje cifrado supera 4096 chars, dividirlo en chunks respetando el límite. Cada chunk se envía como un `sendMessage` separado al mismo `chat_id`.
-2. Solo el último chunk lleva el `inline_keyboard` con el botón "Descifrar →" — los anteriores son texto plano sin botón, para que el receptor sepa que hay más partes antes de ese botón.
-3. El deep link del botón en el último chunk apunta a `#c=<ciphertext completo urlencoded>` — el ciphertext **no** se divide: el fragmento contiene el código cifrado entero. Esto significa que el botón del último chunk funciona exactamente igual que hoy (pre-carga el campo Descifrar con el código completo).
-4. Los chunks se envían secuencialmente (no en paralelo) para preservar el orden de llegada en Telegram.
-
-**Detalle de chunking:**
-- El corte debe hacerse en límites de token del cifrado (los `-` separadores), nunca en el medio de un token, para que el receptor no confunda chunks intermedios con códigos cifrados parciales.
-- Cada chunk lleva un prefijo `[1/N]`, `[2/N]`, etc. para que el receptor sepa que el mensaje es multiparte.
-
-**Cambios necesarios:**
-- `app.js` — `enviarATelegram()`: reemplazar el `throw` de longitud por la lógica de chunking. Extraer como función pura `chunkCipherText(codigo, maxLen)` para que sea testeable.
-- `app.js` — `handleSend()`: el status de "Enviado" debe reflejar cuántos chunks se enviaron (`"Enviado en 3 partes."`) si fueron más de uno.
-- `TO_FIX.md`: cerrar el item implícito de "large messages" una vez implementado.
-
-**Consideración de seguridad:** los chunks intermedios contienen fragmentos del ciphertext en texto plano en Telegram. Esto no rompe el cifrado (el ciphertext ya estaba en Telegram de todas formas en mensajes cortos), pero expone el tamaño aproximado del mensaje original. Aceptable para el caso de uso actual.
+**Consideración de seguridad:** los chunks intermedios contienen fragmentos del ciphertext en texto plano en Telegram. Esto no rompe el cifrado pero expone el tamaño aproximado del mensaje original. Aceptable para el caso de uso actual.
 
 ---
 
