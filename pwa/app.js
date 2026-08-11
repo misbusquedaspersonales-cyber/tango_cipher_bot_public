@@ -3,7 +3,7 @@
  *
  * Wires together secure-vault.js (credential/corpus storage) and
  * cipherEngine.js (the cipher itself) into the actual UI, following the
- * frictionless flow documented in PASOS_PROYECTO_CIFRADO_TANGOS.md Paso 5:
+ * frictionless flow documented in TECH_SPECS_CIFRADO_TANGOS.md Paso 5:
  *
  *   First run:  hasPayloadDirect() -> false -> ask CLAVE_DESPLIEGUE ->
  *               fetch encrypted-bundle.json -> unlockDeployBundle() ->
