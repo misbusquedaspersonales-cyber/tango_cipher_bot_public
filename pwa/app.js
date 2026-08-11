@@ -35,6 +35,7 @@
  */
 
 import { cifrarMensaje, descifrarMensaje } from "./cipherEngine.js";
+import { consumeDeepLink, buildDeepLink, buildSendMessageBody } from "./deeplink.js";
 import {
     unlockDeployBundle,
     savePayloadDirect,
@@ -148,30 +149,13 @@ async function enviarATelegram(mensajeCifrado, botToken, chatId) {
         );
     }
 
-    // Build the deep link URL. Uses the current page's origin + path so it
-    // works on GitHub Pages and on any local dev server without hardcoding.
-    // The ciphertext goes in the fragment (#c=...) so it never appears in
-    // server logs or Referer headers. encodeURIComponent handles hyphens,
-    // tildes, carets, and hash signs that appear in the token grammar.
-    const deepLink = `${location.origin}${location.pathname}#c=${encodeURIComponent(mensajeCifrado)}`;
+    const deepLink = buildDeepLink(location.origin, location.pathname, location.search, mensajeCifrado);
 
     const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
     const resp = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            chat_id: chatId,
-            text: mensajeCifrado,
-            // inline_keyboard adds a "Descifrar →" button below the message.
-            // A url button never triggers Telegram's link preview (unlike a
-            // bare URL in the message text, which would cause Telegram's
-            // servers to fetch the URL and expose the ciphertext to them).
-            reply_markup: {
-                inline_keyboard: [[
-                    { text: "Descifrar →", url: deepLink }
-                ]]
-            }
-        }),
+        body: JSON.stringify(buildSendMessageBody(mensajeCifrado, chatId, deepLink)),
     });
     if (!resp.ok) {
         let detalle = "";
@@ -591,29 +575,9 @@ async function handleDisablePin() {
 
 // ---------- deep link (incoming ciphertext via #c=...) ----------
 
-/**
- * Reads and immediately clears the URL fragment so the ciphertext doesn't
- * stay visible in the address bar, doesn't re-trigger on refresh, and
- * doesn't appear in the browser history entry for this page.
- *
- * Returns the decoded ciphertext string, or null if the fragment isn't
- * a deep link produced by this app.
- */
-function consumeDeepLink() {
-    const hash = location.hash;
-    if (!hash.startsWith("#c=")) return null;
-
-    // Clear the fragment from the address bar immediately — before any async
-    // work so it's gone even if the vault unlock takes a few seconds.
-    history.replaceState(null, "", location.pathname + location.search);
-
-    try {
-        return decodeURIComponent(hash.slice(3)); // slice off "#c="
-    } catch {
-        // Malformed percent-encoding — treat as no deep link rather than crash.
-        return null;
-    }
-}
+// consumeDeepLink() and buildSendMessageBody() live in ./deeplink.js and are
+// imported at the top of this file. See TO_FIX.md F-6 for the history of
+// why they were extracted.
 
 /**
  * If a ciphertext arrived via deep link, switch to Descifrar mode and

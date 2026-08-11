@@ -4,19 +4,16 @@
  * Tests for the deep-link reception logic introduced in Fase 7.1:
  *   - consumeDeepLink(): reads #c=... from location.hash, clears it,
  *     returns decoded ciphertext or null.
- *   - enviarATelegram() reply_markup: verifies the inline_keyboard button
- *     is included with the correct url in the Telegram API payload.
+ *   - buildSendMessageBody(): verifies the inline_keyboard button shape
+ *     for the Telegram sendMessage call.
  *
- * KNOWN LIMITATION (TO_FIX.md F-6): consumeDeepLink() and buildSendMessageBody()
- * are reimplemented here as inline copies rather than imported from pwa/app.js,
- * because app.js touches DOM globals at module scope and can't be imported in
- * Node without a full DOM stub. These copies must stay in sync with the real
- * implementations. The fix is to extract them into a DOM-free pwa/deeplink.js
- * module that both app.js and this test file import directly.
+ * Imports the real implementations from pwa/deeplink.js (TO_FIX.md F-6
+ * resolved). No more inline copies that must be kept in sync by hand.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { consumeDeepLink, buildDeepLink, buildSendMessageBody } from '../../pwa/deeplink.js';
 
 // ---------- stubs ----------
 
@@ -37,20 +34,6 @@ function makeHistory() {
         calls,
         replaceState(state, title, url) { calls.push(url); },
     };
-}
-
-// Inline the pure logic of consumeDeepLink() so we can test it without
-// importing all of app.js (which touches document/DOM at module scope).
-// This must stay in sync with the implementation in pwa/app.js.
-function consumeDeepLink(loc, hist) {
-    const hash = loc.hash;
-    if (!hash.startsWith('#c=')) return null;
-    hist.replaceState(null, '', loc.pathname + loc.search);
-    try {
-        return decodeURIComponent(hash.slice(3));
-    } catch {
-        return null;
-    }
 }
 
 // ---------- consumeDeepLink tests ----------
@@ -97,24 +80,24 @@ test('consumeDeepLink: returns null for malformed percent-encoding', () => {
     assert.equal(consumeDeepLink(loc, hist), null);
 });
 
-// ---------- enviarATelegram reply_markup tests ----------
-// Inline the relevant part of enviarATelegram() to test the payload shape
-// without importing app.js. Must stay in sync with pwa/app.js.
+// ---------- buildDeepLink tests ----------
 
-function buildSendMessageBody(mensajeCifrado, chatId, deepLink) {
-    return {
-        chat_id: chatId,
-        text: mensajeCifrado,
-        reply_markup: {
-            inline_keyboard: [[
-                { text: 'Descifrar →', url: deepLink }
-            ]]
-        }
-    };
-}
+test('buildDeepLink: produces correct fragment URL', () => {
+    const cipher = '50-V01P02-~20-V01P03';
+    const url = buildDeepLink('https://example.github.io', '/pwa/index.html', '', cipher);
+    assert.equal(url, 'https://example.github.io/pwa/index.html#c=' + encodeURIComponent(cipher));
+});
+
+test('buildDeepLink: preserves search param before fragment', () => {
+    const url = buildDeepLink('https://x.io', '/pwa/index.html', '?src=twa-apk', '50-V01P02');
+    assert.ok(url.includes('?src=twa-apk#c='), 'search comes before fragment');
+});
+
+// ---------- buildSendMessageBody / reply_markup tests ----------
 
 test('reply_markup: includes inline_keyboard with Descifrar button', () => {
-    const body = buildSendMessageBody('50-V01P02', '123456', 'https://x.io/pwa/index.html#c=50-V01P02');
+    const deepLink = buildDeepLink('https://x.io', '/pwa/index.html', '', '50-V01P02');
+    const body = buildSendMessageBody('50-V01P02', '123456', deepLink);
     assert.ok(body.reply_markup, 'reply_markup present');
     assert.ok(Array.isArray(body.reply_markup.inline_keyboard), 'inline_keyboard is array');
     const btn = body.reply_markup.inline_keyboard[0][0];
@@ -124,7 +107,7 @@ test('reply_markup: includes inline_keyboard with Descifrar button', () => {
 
 test('reply_markup: button url contains the ciphertext as encoded fragment', () => {
     const cipher = '50-V01P02-~20-#7b8794';
-    const deepLink = 'https://x.io/pwa/index.html#c=' + encodeURIComponent(cipher);
+    const deepLink = buildDeepLink('https://x.io', '/pwa/index.html', '', cipher);
     const body = buildSendMessageBody(cipher, '123', deepLink);
     const btn = body.reply_markup.inline_keyboard[0][0];
     assert.equal(decodeURIComponent(btn.url.split('#c=')[1]), cipher);
@@ -132,6 +115,7 @@ test('reply_markup: button url contains the ciphertext as encoded fragment', () 
 
 test('reply_markup: preserves ciphertext unchanged in text field', () => {
     const cipher = '50-V01P02';
-    const body = buildSendMessageBody(cipher, '123', 'https://x.io/#c=' + cipher);
+    const deepLink = buildDeepLink('https://x.io', '/pwa/index.html', '', cipher);
+    const body = buildSendMessageBody(cipher, '123', deepLink);
     assert.equal(body.text, cipher);
 });

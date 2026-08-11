@@ -6,8 +6,8 @@
 |---|---|---|---|
 | 🟢 P3 (Low) | 2 | 1 | 1 |
 | 🔵 P4 (Refactor) | 4 | 3 | 1 |
-| 🔧 Follow-up (2026-08-01) | 6 | 4 | 2 |
-| **Total** | **12** | **8** | **4** |
+| 🔧 Follow-up (2026-08-01) | 6 | 6 | 0 |
+| **Total** | **12** | **10** | **2** |
 
 ---
 
@@ -93,16 +93,11 @@
 
 ## 🔧 Follow-up Review (2026-08-01)
 
-### [ ] F-6: `deeplink.test.mjs` Tests Duplicate Logic Instead of Importing from `app.js`
+### [x] F-6: `deeplink.test.mjs` Tests Duplicate Logic Instead of Importing from `app.js`
 
 - **Added**: 2026-08-01 (session 4), after Fase 7.1 deep-link feature landed.
 - **Problem**: `tests/js/deeplink.test.mjs` reimplements `consumeDeepLink()` and `buildSendMessageBody()` as inline copies rather than importing them from `pwa/app.js`. The test file even carries a comment: "must stay in sync with the implementation in pwa/app.js." This is the same two-copies-that-must-be-kept-in-sync pattern flagged for `scripts/ci/build_encrypted_bundle.py` — if someone edits the real function without updating the test copy, tests keep passing while real code silently breaks.
-- **Why it happened**: `app.js` uses `document`, `location`, `history`, `navigator` at module scope — importing it in Node without a DOM stub throws immediately. `cipherEngine.js` and `secure-vault.js` are importable directly because they only touch Web Crypto and IndexedDB, both of which can be stubbed. `app.js` can't be imported the same way without a full DOM harness.
-- **Fix**: one of two paths:
-  1. **Extract** `consumeDeepLink()` and the `reply_markup` builder into a small DOM-free module (e.g. `pwa/deeplink.js`) that `app.js` imports. Then both `deeplink.test.mjs` and `app.js` import the real implementation — zero duplication.
-  2. **Stub the DOM** in the test file the same way `pwa_e2e.test.mjs` stubs `indexedDB` and `localStorage`, then import `app.js` for real via `new URL(...)`. More setup, but tests the actual wiring rather than an extracted helper.
-- **Option 1 is simpler** and consistent with the `corpus.py` / `telegram.py` split already done on the Python side (P4-1). `deeplink.js` would be ~30 lines and have zero dependencies beyond standard browser APIs.
-- **Not urgent**: the current tests are better than nothing and the duplicated logic is simple enough that drift is low-risk in the short term. But fix before app.js grows more testable-but-untested functions.
+- **Resolved**: extracted `consumeDeepLink()`, `buildDeepLink()`, and `buildSendMessageBody()` into `pwa/deeplink.js` (DOM-free, fully testable). `app.js` imports from it; `deeplink.test.mjs` imports the real implementations — zero duplication. `service-worker.js` SHELL_FILES updated to cache `deeplink.js`; CACHE_VERSION bumped to v8. Tests: 41/41 pass (+2 new `buildDeepLink` tests).
 
 ---
 
@@ -132,8 +127,7 @@
 
 ---
 
-### [ ] F-5: `scripts/check_coverage.py` / `tests/test_check_coverage.py` Are Documented but Absent
+### [x] F-5: `scripts/check_coverage.py` / `tests/test_check_coverage.py` Are Documented but Absent
 
 - **Files**: referenced in `CHANGELOG.md`; stale `.pyc` bytecode in `__pycache__/`.
-- **Status**: not fixed — not recoverable from bytecode alone without risk of silent divergence.
-- **Recommendation**: restore from git history or private repo, or remove the dangling `CHANGELOG.md` reference.
+- **Resolved**: `CHANGELOG.md` legacy entry struck through and annotated with a pointer to this item. Not recovered from bytecode (risk of silent divergence). If the files are later found in git history or the private repo, restore them and add to `package.json` test run.

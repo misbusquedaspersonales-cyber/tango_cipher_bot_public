@@ -199,7 +199,7 @@
 ## [Unreleased legacy] - 2026-07-25 (contenido anterior previo al reorden)
 
 ### Added
-- `scripts/check_coverage.py` y `tests/test_check_coverage.py` — script de utilidad para verificar la cobertura de codificación de un texto de prueba contra el corpus de tangos (Fase 2).
+- ~~`scripts/check_coverage.py` y `tests/test_check_coverage.py`~~ — referenciados aquí originalmente, pero los archivos fuente nunca llegaron al repo público. Solo queda bytecode `.pyc`. Ver `TO_FIX.md` F-5 (no recuperable desde bytecode sin riesgo de divergencia silenciosa).
 - Letras de tangos adicionales ("Volver", "Caminito") preparadas en formato JSON (`tangos_nuevos.json`) para su integración al corpus privado.
 - `tangos.json` ampliado de 2 a 7 tangos. Los versos auténticos se complementan con versos de relleno técnico (`padding: true`) para ampliar la cobertura de vocabulario moderno. Los versos de relleno no forman parte de la letra original:
   - **1** Mano a mano (ampliado con versos auténticos)

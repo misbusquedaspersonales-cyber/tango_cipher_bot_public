@@ -26,7 +26,7 @@
  * new SW but old cipherEngine.js in memory could desync).
  */
 
-const CACHE_VERSION = "tango-cifrado-v7";
+const CACHE_VERSION = "tango-cifrado-v8";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const BUNDLE_CACHE = `${CACHE_VERSION}-bundle`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
@@ -36,6 +36,7 @@ const SHELL_FILES = [
     "./",
     "./index.html",
     "./app.js",
+    "./deeplink.js",
     "./cipherEngine.js",
     "./secure-vault.js",
     "./manifest.json",
