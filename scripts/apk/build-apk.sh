@@ -12,7 +12,8 @@
 #   ./scripts/apk/build-apk.sh      (desde la raíz)
 #
 # Variables de entorno opcionales:
-#   KEYSTORE_PASS    si no está, lee de tango-cifrado-apk/keystore-password.txt
+#   KEYSTORE_FILE    ruta absoluta a android.keystore (override; ver resolución abajo)
+#   KEYSTORE_PASS    contraseña de la keystore (override; ver resolución abajo)
 #   BUILD_OUTPUT_DIR donde copiar .apk + .aab (default: dist/apk/ en el repo)
 #   SKIP_BUBBLEWRAP_CHECK=1  salta la validación de que twa-manifest.json exista
 
@@ -29,6 +30,39 @@ fi
 
 PASS_FILE="$APK_DIR/keystore-password.txt"
 OUT_DIR="${BUILD_OUTPUT_DIR:-$REPO_ROOT/dist/apk}"
+
+# ── Keystore resolution (never stored in the repo) ──────────────────────────
+# Priority:
+#   1. KEYSTORE_FILE env var (explicit override)
+#   2. ~/tango-signing/android.keystore  (recommended out-of-repo location)
+#   3. $APK_DIR/android.keystore         (legacy in-workspace path, discouraged)
+# Password resolution:
+#   1. KEYSTORE_PASS env var
+#   2. ~/tango-signing/keystore-password.txt
+#   3. $APK_DIR/keystore-password.txt    (legacy)
+#   4. Interactive prompt
+if [ -n "${KEYSTORE_FILE:-}" ]; then
+  RESOLVED_KEYSTORE="$KEYSTORE_FILE"
+elif [ -f "$HOME/tango-signing/android.keystore" ]; then
+  RESOLVED_KEYSTORE="$HOME/tango-signing/android.keystore"
+elif [ -f "$APK_DIR/android.keystore" ]; then
+  RESOLVED_KEYSTORE="$APK_DIR/android.keystore"
+else
+  RESOLVED_KEYSTORE=""
+fi
+
+if [ -z "${KEYSTORE_PASS:-}" ]; then
+  if [ -f "$HOME/tango-signing/keystore-password.txt" ]; then
+    export KEYSTORE_PASS="$(cat "$HOME/tango-signing/keystore-password.txt")"
+  elif [ -f "$APK_DIR/keystore-password.txt" ]; then
+    export KEYSTORE_PASS="$(cat "$APK_DIR/keystore-password.txt")"
+  fi
+fi
+
+# Prefer ~/tango-signing/keystore-password.txt for PASS_FILE interactive fallback
+if [ -f "$HOME/tango-signing/keystore-password.txt" ]; then
+  PASS_FILE="$HOME/tango-signing/keystore-password.txt"
+fi
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -56,8 +90,17 @@ if [ "${SKIP_BUBBLEWRAP_CHECK:-0}" != "1" ] && [ ! -f "$APK_DIR/twa-manifest.jso
   bubblewrap init --manifest="https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/manifest.json"
 fi
 
-if [ ! -f "$APK_DIR/android.keystore" ]; then
-  echo -e "${RED}❌ Falta $APK_DIR/android.keystore. Corré primero: ../scripts/apk/generate-keystore.sh${NC}"
+if [ -z "$RESOLVED_KEYSTORE" ]; then
+  echo -e "${RED}❌ No se encontró android.keystore.${NC}"
+  echo
+  echo "   Opciones:"
+  echo "   1. Copiá la keystore al directorio recomendado (fuera del repo):"
+  echo "        mkdir -p ~/tango-signing"
+  echo "        cp /ruta/a/android.keystore ~/tango-signing/"
+  echo "   2. Pasá la ruta explícita como variable de entorno:"
+  echo "        KEYSTORE_FILE=/ruta/a/android.keystore ../scripts/apk/build-apk.sh"
+  echo "   3. Generá una nueva keystore (solo si no tenés la original):"
+  echo "        ../scripts/apk/generate-keystore.sh"
   exit 1
 fi
 
@@ -75,19 +118,62 @@ echo "============================================================"
 echo -e "  ${GREEN}Compilando APK (bubblewrap build)${NC}"
 echo "============================================================"
 echo "  Directorio : $APK_DIR"
-echo "  Keystore   : $APK_DIR/android.keystore"
+echo "  Keystore   : $RESOLVED_KEYSTORE"
 echo
 
-# Bubblewrap is interactive by default: on first run it prompts "Do you want
-# Bubblewrap to install the JDK (recommended)? (Y/n)". We already have JDK
-# installed so auto-answer "n". We also set CI=true so any future interactive
-# prompts get sensible defaults instead of hanging.
+# ── Patch twa-manifest.json with the resolved keystore path ─────────────────
+# bubblewrap reads signingKey.path from twa-manifest.json. If the keystore
+# lives outside the workspace (recommended), we patch it to the absolute path
+# before building, then restore the original on exit.
+MANIFEST="$APK_DIR/twa-manifest.json"
+MANIFEST_BAK="$APK_DIR/twa-manifest.json.bak"
+cp "$MANIFEST" "$MANIFEST_BAK"
+cleanup_manifest() {
+  mv "$MANIFEST_BAK" "$MANIFEST" 2>/dev/null || true
+}
+trap cleanup_manifest EXIT INT TERM
+
+python3 - "$MANIFEST" "$RESOLVED_KEYSTORE" <<'PYEOF'
+import sys, json
+path, ks = sys.argv[1], sys.argv[2]
+with open(path) as f:
+    data = json.load(f)
+data["signingKey"]["path"] = ks
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+PYEOF
+
+# ── Ensure ~/.bubblewrap/config.json has the JDK path pre-filled ─────────────
+# bubblewrap opens /dev/tty directly for its JDK prompt, so stdin pipes don't
+# work. The only reliable fix is to pre-populate its config file.
+BWRAP_CONFIG="$HOME/.bubblewrap/config.json"
+if [ -f "$BWRAP_CONFIG" ]; then
+  current_jdk="$(python3 -c "import json; d=json.load(open('$BWRAP_CONFIG')); print(d.get('jdkPath',''))")"
+  if [ -z "$current_jdk" ]; then
+    if [ -n "${JAVA_HOME:-}" ] && [ -d "$JAVA_HOME" ]; then
+      JDK_PATH="$JAVA_HOME"
+    else
+      JAVA_BIN="$(readlink -f "$(which java)")"
+      JDK_PATH="$(dirname "$(dirname "$JAVA_BIN")")"
+    fi
+    python3 - "$BWRAP_CONFIG" "$JDK_PATH" <<'PYEOF'
+import sys, json
+cfg, jdk = sys.argv[1], sys.argv[2]
+with open(cfg) as f:
+    data = json.load(f)
+data["jdkPath"] = jdk
+with open(cfg, "w") as f:
+    json.dump(data, f)
+    f.write("\n")
+PYEOF
+    echo "  ℹ️  ~/.bubblewrap/config.json actualizado con JDK: $JDK_PATH"
+    echo
+  fi
+fi
+
 export CI="${CI:-true}"
-{
-  # Two "n"s just in case: first prompt = JDK install, second = any future one.
-  printf 'n\nn\n'
-  # After stdin closes, bubblewrap should continue non-interactive with CI=true
-} | bubblewrap build
+bubblewrap build
 
 echo
 echo -e "${GREEN}✅ bubblewrap build finalizado.${NC}"

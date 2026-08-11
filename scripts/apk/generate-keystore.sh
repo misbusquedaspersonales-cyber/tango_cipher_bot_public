@@ -42,6 +42,11 @@
 
 set -euo pipefail
 
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
 KNOWN_COMPROMISED_PASSWORDS=(
   "TangoCifrado-Sandbox-2026!"   # sandbox keystore, hardcoded in _runall_sandbox.sh
   "SeVestiraDeFiesta"            # second keystore, leaked via workspace export tool
@@ -70,10 +75,6 @@ PASS_FILE="$APK_DIR/keystore-password.txt"
 ALIAS="${KEYSTORE_ALIAS:-android}"
 DNAME="${KEYSTORE_DNAME:-CN=Tango Cifrado, OU=Dev, O=TangoCifrado, L=Buenos Aires, ST=CABA, C=AR}"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
 
 if ! command -v keytool >/dev/null 2>&1; then
   echo -e "${RED}❌ keytool no encontrado. Instalá JDK 17+ primero: ${YELLOW}../scripts/apk/install-deps.sh${NC}"
