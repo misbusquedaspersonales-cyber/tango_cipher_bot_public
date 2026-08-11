@@ -1,4 +1,4 @@
-# Próximos Pasos — APK TWA (Fase 9)
+# PASOS_APK — Estado y Referencia APK TWA (Fase 9)
 
 ## Estado actual (2026-08-03, post-regeneración de keystore)
 

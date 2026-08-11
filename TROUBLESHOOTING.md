@@ -256,12 +256,12 @@ Si aún así sigue con barra URL → revisá `apple-mobile-web-app-capable` meta
 
 ### 12.4 Síntoma: Modo Avión no funciona o muestra error críptico "HTTP 0"
 
-Hay **dos escenarios** deliberadamente distintos. El parche de caché v5→v7 arregló el error "HTTP 0 sin contexto". Si volvés a verlo, es que tu teléfono aún tiene un Service Worker **viejo** (versión pre-v7).
+Hay **dos escenarios** deliberadamente distintos. El parche de caché v5→v8 arregló el error "HTTP 0 sin contexto". Si volvés a verlo, es que tu teléfono aún tiene un Service Worker **viejo** (versión pre-v8).
 
 **Escenario esperado A — Bundle ya cacheado (uso diario offline):**
 App que ya abriste y desbloqueaste una vez → en Modo Avión abre instantáneo, compositor funciona sin conexión. Si no pasa:
 - DevTools → Application → Service Workers → Bypass for network OFF (sino sw está desactivado)
-- DevTools → Application → Cache Storage → debe existir `tango-cifrado-v7-shell` y `tango-cifrado-v7-bundle`. Si los nombres dicen `v5` o no hay bundle cacheado → te falta 1 vez haber abierto con internet.
+- DevTools → Application → Cache Storage → debe existir `tango-cifrado-v8-shell` y `tango-cifrado-v8-bundle`. Si los nombres dicen `v5` o no hay bundle cacheado → te falta 1 vez haber abierto con internet.
 
 **Escenario esperado B — Sin bundle + Sin red (verdadero primer run en avión):**
 Aparece mensaje en **español claro**, no un HTTP 0 críptico:
@@ -271,7 +271,7 @@ Si en vez de eso ves `No se pudo descargar ./encrypted-bundle.json (HTTP 0)` →
 ```
 Chrome ⋮ → ⓘ (info del sitio) → Permisos y almacenamiento → Administrar espacio → Borrar almacenamiento.
 ```
-Cerrá y volvé a abrir. El SW recién instalado es el v7. Si es una instalación standalone (no Chrome tab), tenés que **desinstalar y reinstalar** la app (settings Android → Apps → Tango → Desinstalar) porque las actualizaciones de SW en modo standalone a veces tardan 24h por política de Chrome.
+Cerrá y volvé a abrir. El SW recién instalado es el v8. Si es una instalación standalone (no Chrome tab), tenés que **desinstalar y reinstalar** la app (settings Android → Apps → Tango → Desinstalar) porque las actualizaciones de SW en modo standalone a veces tardan 24h por política de Chrome.
 
 ---
 

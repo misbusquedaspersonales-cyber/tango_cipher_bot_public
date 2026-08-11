@@ -53,4 +53,4 @@ bubblewrap init --manifest=https://misbusquedaspersonales-cyber.github.io/tango_
 #    ✅ Confirmar que NO aparece la barra de URL de Chrome (si aparece, falló el assetlinks).
 ```
 
-Guía completa y paso a paso en `../PROXIMOS_PASOS_APK.md` (hermano de esta carpeta).
+Guía completa y paso a paso en `../PASOS_APK.md` (hermano de esta carpeta).

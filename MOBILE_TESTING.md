@@ -30,7 +30,7 @@ En iPhone Safari: Compartir → Agregar a pantalla de inicio. En Android Chrome:
 
 ## ✅ Checklist de regresión — Release 2026-07-31 (caché + short URLs)
 
-Este checklist **no es genérico**: los 7 puntos ejercitan específicamente los cambios del parche caché del 2026-07-31 (service worker rewrite, CACHE_VERSION v5→v7, fallback offline distinguible X-Tango-Offline, redirects de raíz). Si algo falla acá, el deploy no pasa.
+Este checklist **no es genérico**: los 7 puntos ejercitan específicamente los cambios del parche caché del 2026-07-31 (service worker rewrite, CACHE_VERSION v5→v8, fallback offline distinguible X-Tango-Offline, redirects de raíz). Si algo falla acá, el deploy no pasa.
 
 ### 0. Pre-requisito: los redirects de raíz están pusheados
 
@@ -100,15 +100,15 @@ Este es el core del parche caché. Son DOS escenarios distintos (ambos deben pas
 
 ### 5. Service Worker update + purga de cachés viejas
 
-Esto valida que el `CACHE_VERSION` bump v5→v7 realmente dispara la purga de viejas instalaciones. Necesitás **una instalación previa de versión vieja** (sin el parche caché). Si no la tenés: simularla usando la URL `/pwa/service-worker.js?v=viejo` en desktop antes de este test, o editar `CACHE_VERSION` a v6 en local y hacer un deploy temporal a una subruta.
+Esto valida que el `CACHE_VERSION` bump v5→v8 realmente dispara la purga de viejas instalaciones. Necesitás **una instalación previa de versión vieja** (sin el parche caché). Si no la tenés: simularla usando la URL `/pwa/service-worker.js?v=viejo` en desktop antes de este test, o editar `CACHE_VERSION` a v6 en local y hacer un deploy temporal a una subruta.
 
 Procedimiento real sobre instalación vieja ya existente en el teléfono:
 1. Conectar USB, abrir `chrome://inspect#devices` en Chrome desktop, seleccionar el WebView de la PWA.
 2. Abrir la app, esperar ~5s (Chrome checkea updates de SW en cada navigation).
 3. **Force-close completo**. Reabrir 1 vez. (Esto es: primera apertura → update check encuentra nuevo SW, `install` + `skipWaiting`; cierre → segunda apertura → `activate` corre y purga.)
 4. En DevTools desktop, pestaña Application → Service Workers:
-   - ✅ El SW `tango-cifrado-v7` figura **activated & running** (no "waiting")
-   - ✅ Storage → Caches: solo deberían aparecer `tango-cifrado-v7-shell`, `tango-cifrado-v7-bundle`, `tango-cifrado-v7-runtime`
+   - ✅ El SW `tango-cifrado-v8` figura **activated & running** (no "waiting")
+   - ✅ Storage → Caches: solo deberían aparecer `tango-cifrado-v8-shell`, `tango-cifrado-v8-bundle`, `tango-cifrado-v8-runtime`
    - ❌ Si aún aparece `tango-cifrado-v5-*` o `v6-*` → `clients.claim()` o `skipWaiting()` no se ejecutó. Revisar Consola por mensajes `[SW activate] purged N old caches.` (lo agrega el install/activate handlers).
 
 ### 6. Envío Telegram real desde datos móviles
