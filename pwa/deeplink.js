@@ -15,24 +15,32 @@
  */
 
 /**
- * Reads and immediately clears the URL fragment so the ciphertext doesn't
- * stay visible in the address bar, doesn't re-trigger on refresh, and
- * doesn't appear in the browser history entry for this page.
+ * Reads and immediately clears the ?c= query parameter so the ciphertext
+ * doesn't stay visible in the address bar, doesn't re-trigger on refresh,
+ * and doesn't appear in the browser history entry for this page.
+ *
+ * NOTE: we use a query parameter (?c=) rather than a URL fragment (#c=)
+ * because Telegram's Android client strips URL fragments before passing
+ * URLs to the Android intent system — the fragment never reaches the app.
+ * Query parameters survive this handling intact.
  *
  * @param {Location} loc   - injectable for testing; defaults to window.location
  * @param {History}  hist  - injectable for testing; defaults to window.history
- * @returns {string|null} decoded ciphertext, or null if no #c= deep link present
+ * @returns {string|null} decoded ciphertext, or null if no ?c= deep link present
  */
 export function consumeDeepLink(loc = location, hist = history) {
-    const hash = loc.hash;
-    if (!hash.startsWith("#c=")) return null;
+    const params = new URLSearchParams(loc.search);
+    const encoded = params.get("c");
+    if (!encoded) return null;
 
-    // Clear the fragment immediately — before any async work — so it's gone
-    // even if vault unlock takes a few seconds.
-    hist.replaceState(null, "", loc.pathname + loc.search);
+    // Remove ?c= from the URL immediately — before any async work — so it's
+    // gone even if vault unlock takes a few seconds.
+    params.delete("c");
+    const newSearch = params.toString() ? "?" + params.toString() : "";
+    hist.replaceState(null, "", loc.pathname + newSearch + loc.hash);
 
     try {
-        return decodeURIComponent(hash.slice(3)); // strip "#c="
+        return decodeURIComponent(encoded);
     } catch {
         // Malformed percent-encoding — treat as no deep link rather than crash.
         return null;
@@ -42,17 +50,28 @@ export function consumeDeepLink(loc = location, hist = history) {
 /**
  * Builds the deep-link URL that the "Descifrar →" button points to.
  * Uses origin + pathname so it works on GitHub Pages and any local dev server.
- * The ciphertext goes in the fragment (#c=) so it never appears in server
- * logs or Referer headers.
+ *
+ * The ciphertext goes in a query parameter (?c=) rather than a URL fragment
+ * (#c=) because Telegram's Android client strips URL fragments before passing
+ * URLs to the intent system — the fragment never reaches the TWA. Query
+ * parameters survive intact.
+ *
+ * Security note: ?c= will appear in GitHub Pages access logs, unlike #c=
+ * which never reached the server. This is an acceptable trade-off: the
+ * ciphertext is already visible as the Telegram message text, so logging it
+ * server-side adds no new exposure.
  *
  * @param {string} origin     - e.g. "https://user.github.io"
  * @param {string} pathname   - e.g. "/repo/pwa/index.html"
  * @param {string} search     - e.g. "" or "?src=twa-apk"
  * @param {string} ciphertext - the raw ciphertext string (will be encoded)
- * @returns {string} full URL with #c=<encoded ciphertext>
+ * @returns {string} full URL with ?c=<encoded ciphertext>
  */
 export function buildDeepLink(origin, pathname, search, ciphertext) {
-    return `${origin}${pathname}${search}#c=${encodeURIComponent(ciphertext)}`;
+    // Merge ?c= into any existing query string cleanly.
+    const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+    params.set("c", ciphertext);
+    return `${origin}${pathname}?${params.toString()}`;
 }
 
 /**
