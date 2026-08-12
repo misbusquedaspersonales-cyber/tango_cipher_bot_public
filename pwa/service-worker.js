@@ -26,7 +26,7 @@
  * new SW but old cipherEngine.js in memory could desync).
  */
 
-const CACHE_VERSION = "tango-cifrado-v9";
+const CACHE_VERSION = "tango-cifrado-v10";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const BUNDLE_CACHE = `${CACHE_VERSION}-bundle`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;

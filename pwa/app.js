@@ -143,25 +143,46 @@ async function setTelegramConfig(config) {
 /**
  * Sends a ciphertext to Telegram, splitting into chunks if it exceeds
  * TELEGRAM_MAX_LEN. Chunks are sent sequentially to preserve order.
- * Only the last chunk carries the "Descifrar →" inline_keyboard button —
- * its deep-link fragment holds the FULL ciphertext so the receiver can
- * decrypt in one tap regardless of how many parts arrived.
+ *
+ * For single-chunk messages: the last (only) chunk carries the full
+ * ciphertext in the "Descifrar →" button URL (?c=...) so the receiver
+ * can decrypt in one tap.
+ *
+ * For multi-chunk messages: the button URL cannot carry the full
+ * ciphertext because Telegram's Bot API limits button URLs to 2048 bytes.
+ * Instead the last chunk carries a button that opens the app directly
+ * (no ?c= param) — the receiver copies the full ciphertext from the
+ * chat manually. This is acceptable: multi-chunk messages are rare and
+ * the ciphertext is already visible in the chat.
  *
  * @returns {Promise<number>} number of chunks sent (1 for short messages)
  */
 async function enviarATelegram(mensajeCifrado, botToken, chatId) {
     const chunks = chunkCipherText(mensajeCifrado, TELEGRAM_MAX_LEN);
-    const deepLink = buildDeepLink(location.origin, location.pathname, location.search, mensajeCifrado);
     const apiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+
+    // Build the deep-link URL only when the full encoded URL fits within
+    // Telegram's 2048-byte button URL limit. For longer ciphertexts the
+    // button simply opens the app — the receiver copies the ciphertext
+    // from the chat manually.
+    const TELEGRAM_URL_MAX = 2048;
+    const deepLink = buildDeepLink(location.origin, location.pathname, location.search, mensajeCifrado);
+    const useDeepLink = deepLink.length <= TELEGRAM_URL_MAX;
 
     for (let i = 0; i < chunks.length; i++) {
         const isLast = i === chunks.length - 1;
-        // Only the last chunk gets the deep-link button. Earlier chunks are
-        // plain text so the receiver can follow the conversation while waiting
-        // for all parts to arrive.
-        const body = isLast
-            ? buildSendMessageBody(chunks[i], chatId, deepLink)
-            : { chat_id: chatId, text: chunks[i] };
+        let body;
+        if (isLast && useDeepLink) {
+            // Single short message — button pre-loads the ciphertext in the app.
+            body = buildSendMessageBody(chunks[i], chatId, deepLink);
+        } else if (isLast) {
+            // Ciphertext too long for button URL — button opens the app to
+            // Descifrar without pre-loading. Receiver copies from chat manually.
+            const appUrl = `${location.origin}${location.pathname}`;
+            body = buildSendMessageBody(chunks[i], chatId, appUrl);
+        } else {
+            body = { chat_id: chatId, text: chunks[i] };
+        }
 
         const resp = await fetch(apiUrl, {
             method: "POST",
@@ -401,7 +422,9 @@ async function handleSend() {
     try {
         const sent = await enviarATelegram(codigo, botToken, chatId);
         setStatus(statusEl,
-            sent > 1 ? `Enviado en ${sent} partes.` : "Enviado.",
+            sent > 1
+                ? `Enviado en ${sent} partes. El receptor debe copiar el texto completo para descifrar.`
+                : "Enviado.",
             "success");
     } catch (err) {
         setStatus(statusEl, err.message || "Error al enviar a Telegram.", "error");
