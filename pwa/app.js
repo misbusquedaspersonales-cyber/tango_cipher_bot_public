@@ -35,7 +35,8 @@
  */
 
 import { cifrarMensaje, descifrarMensaje } from "./cipherEngine.js";
-import { consumeDeepLink, buildDeepLink, buildSendMessageBody, chunkCipherText } from "./deeplink.js";
+import { sendCiphertext } from "./core/transport/index.js";
+import { resolveIncoming } from "./core/receive/index.js";
 import {
     unlockDeployBundle,
     savePayloadDirect,
@@ -53,10 +54,6 @@ import {
 const TELEGRAM_CONFIG_KEY = "tango-cifrado:telegram-config";
 const VAULT_MODE_KEY = "tango-cifrado:vault-mode"; // 'direct' | 'pin'
 const BUNDLE_URL = "./encrypted-bundle.json";
-// Telegram's sendMessage caps text at 4096 UTF-8 characters.
-// chunkCipherText() in deeplink.js uses this to split long ciphertexts
-// across multiple messages automatically.
-const TELEGRAM_MAX_LEN = 4096;
 
 // ---------- state ----------
 
@@ -138,72 +135,6 @@ async function setTelegramConfig(config) {
     } else {
         saveTelegramConfigToLocalStorage(config);
     }
-}
-
-/**
- * Sends a ciphertext to Telegram, splitting into chunks if it exceeds
- * TELEGRAM_MAX_LEN. Chunks are sent sequentially to preserve order.
- *
- * For single-chunk messages: the last (only) chunk carries the full
- * ciphertext in the "Descifrar →" button URL (?c=...) so the receiver
- * can decrypt in one tap.
- *
- * For multi-chunk messages: the button URL cannot carry the full
- * ciphertext because Telegram's Bot API limits button URLs to 2048 bytes.
- * Instead the last chunk carries a button that opens the app directly
- * (no ?c= param) — the receiver copies the full ciphertext from the
- * chat manually. This is acceptable: multi-chunk messages are rare and
- * the ciphertext is already visible in the chat.
- *
- * @returns {Promise<number>} number of chunks sent (1 for short messages)
- */
-async function enviarATelegram(mensajeCifrado, botToken, chatId) {
-    const chunks = chunkCipherText(mensajeCifrado, TELEGRAM_MAX_LEN);
-    const apiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
-
-    // Build the deep-link URL only when the full encoded URL fits within
-    // Telegram's 2048-byte button URL limit. For longer ciphertexts the
-    // button simply opens the app — the receiver copies the ciphertext
-    // from the chat manually.
-    const TELEGRAM_URL_MAX = 2048;
-    const deepLink = buildDeepLink(location.origin, location.pathname, location.search, mensajeCifrado);
-    const useDeepLink = deepLink.length <= TELEGRAM_URL_MAX;
-
-    for (let i = 0; i < chunks.length; i++) {
-        const isLast = i === chunks.length - 1;
-        let body;
-        if (isLast && useDeepLink) {
-            // Single short message — button pre-loads the ciphertext in the app.
-            body = buildSendMessageBody(chunks[i], chatId, deepLink);
-        } else if (isLast) {
-            // Ciphertext too long for button URL — button opens the app to
-            // Descifrar without pre-loading. Receiver copies from chat manually.
-            const appUrl = `${location.origin}${location.pathname}`;
-            body = buildSendMessageBody(chunks[i], chatId, appUrl);
-        } else {
-            body = { chat_id: chatId, text: chunks[i] };
-        }
-
-        const resp = await fetch(apiUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-        });
-
-        if (!resp.ok) {
-            let detalle = "";
-            try {
-                const json = await resp.json();
-                detalle = json && json.description ? json.description : "";
-            } catch { /* fall through to bare status */ }
-            const partLabel = chunks.length > 1 ? ` (parte ${i + 1}/${chunks.length})` : "";
-            throw new Error(detalle
-                ? `Telegram${partLabel}: ${detalle}`
-                : `Telegram respondió con error ${resp.status}${partLabel}`);
-        }
-    }
-
-    return chunks.length;
 }
 
 // ---------- vault mode (direct vs PIN-gated) ----------
@@ -412,19 +343,20 @@ async function handleSend() {
     const codigo = $("#send-row").dataset.cipherText;
     const button = $("#send-button");
     button.disabled = true;
-
-    // Show a progress hint for multi-part messages before the first fetch.
-    const totalChunks = chunkCipherText(codigo, TELEGRAM_MAX_LEN).length;
-    setStatus(statusEl,
-        totalChunks > 1 ? `Enviando parte 1 de ${totalChunks}…` : "Enviando a Telegram…",
-        "info");
+    setStatus(statusEl, "Enviando a Telegram…", "info");
 
     try {
-        const sent = await enviarATelegram(codigo, botToken, chatId);
+        const result = await sendCiphertext(codigo, {
+            botToken,
+            chatId,
+            origin: location.origin,
+            pathname: location.pathname,
+            search: location.search,
+        });
         setStatus(statusEl,
-            sent > 1
-                ? `Enviado en ${sent} partes. El receptor debe copiar el texto completo para descifrar.`
-                : "Enviado.",
+            result.deepLinkCapable
+                ? "Enviado."
+                : "Enviado. El receptor debe abrir el archivo adjunto para descifrar.",
             "success");
     } catch (err) {
         setStatus(statusEl, err.message || "Error al enviar a Telegram.", "error");
@@ -618,11 +550,11 @@ async function handleDisablePin() {
     }
 }
 
-// ---------- deep link (incoming ciphertext via #c=...) ----------
+// ---------- deep link / incoming ciphertext ----------
 
-// consumeDeepLink() and buildSendMessageBody() live in ./deeplink.js and are
-// imported at the top of this file. See TO_FIX.md F-6 for the history of
-// why they were extracted.
+// consumeDeepLink() lives in core/receive/from-query-param.js.
+// resolveIncoming() lives in core/receive/index.js.
+// Both are called at the top of init() via resolveIncoming().
 
 /**
  * If a ciphertext arrived via deep link, switch to Descifrar mode and
@@ -673,9 +605,9 @@ function enterComposer(autoRunDeepLink = false) {
 }
 
 async function init() {
-    // Read and clear the URL fragment first — before any async work — so the
-    // ciphertext disappears from the address bar even if vault unlock is slow.
-    pendingDeepLink = consumeDeepLink();
+    // Read and clear any incoming ciphertext (from ?c= query param or shared
+    // file) before any async work, so the URL is clean before vault unlock.
+    pendingDeepLink = await resolveIncoming({ loc: location, hist: history });
     $("#unlock-form").addEventListener("submit", handleUnlockSubmit);
     $("#pin-unlock-form").addEventListener("submit", handlePinUnlockSubmit);
     $("#mode-cifrar").addEventListener("click", () => setMode("cifrar"));
@@ -683,6 +615,23 @@ async function init() {
     $("#run-action").addEventListener("click", handleRunAction);
     $("#copy-button").addEventListener("click", handleCopy);
     $("#send-button").addEventListener("click", handleSend);
+
+    // File input fallback for receiving ciphertext via shared .txt file
+    // (document transport strategy). Works before Web Share Target is wired.
+    const openFileInput = $("#open-file");
+    if (openFileInput) {
+        openFileInput.addEventListener("change", async (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const codigo = await resolveIncoming({ sharedFile: file });
+            // Reset the input so the same file can be opened again if needed.
+            openFileInput.value = "";
+            if (codigo) {
+                pendingDeepLink = codigo;
+                applyDeepLinkIfPending(/* autoRun */ vaultMode === "direct" && !!payload);
+            }
+        });
+    }
 
     // Hide the send-row and clear the output whenever the textarea is emptied.
     // Without this, clicking Cifrar then erasing the text leaves the Copiar /

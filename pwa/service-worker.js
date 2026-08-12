@@ -26,7 +26,7 @@
  * new SW but old cipherEngine.js in memory could desync).
  */
 
-const CACHE_VERSION = "tango-cifrado-v10";
+const CACHE_VERSION = "tango-cifrado-v11";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const BUNDLE_CACHE = `${CACHE_VERSION}-bundle`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
@@ -36,9 +36,17 @@ const SHELL_FILES = [
     "./",
     "./index.html",
     "./app.js",
-    "./deeplink.js",
     "./cipherEngine.js",
     "./secure-vault.js",
+    "./core/transport/types.js",
+    "./core/transport/chunked-text.js",
+    "./core/transport/document.js",
+    "./core/transport/server-bridge.js",
+    "./core/transport/index.js",
+    "./core/receive/from-query-param.js",
+    "./core/receive/from-shared-file.js",
+    "./core/receive/from-server-push.js",
+    "./core/receive/index.js",
     "./manifest.json",
     "./fonts/IBMPlexMono-Regular.ttf",
     "./fonts/IBMPlexMono-Bold.ttf",

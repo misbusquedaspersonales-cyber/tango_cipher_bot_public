@@ -5,7 +5,7 @@
 | Priority | Total | Done | Pending |
 |---|---|---|---|
 | 🟢 P3 (Low) | 1 | 0 | 1 |
-| 🔵 P4 (Refactor) | 1 | 0 | 1 |
+| 🔵 P4 (Refactor) | 1 | 1 | 0 |
 | 🔧 Maintenance | 2 | 0 | 2 |
 | 🔧 Chunking edge cases | 2 | 0 | 2 |
 | **Total** | **6** | **0** | **6** |
@@ -28,26 +28,9 @@
 
 ## 🔵 P4 — REFACTOR (Structure / Maintainability)
 
-### [ ] P4-2: `app.js` Mixes Three Distinct Concerns in One 500+ Line File
+### [x] P4-2: `app.js` Mixes Three Distinct Concerns in One 500+ Line File
 
-- **File**: `pwa/app.js` — currently **732 lines** (was 629 on 2026-08-01, grown ~100 lines since without the split happening).
-- **Status**: partially folded into Fase 10.1.1 (transport layer). The `core/transport/` and `core/receive/` extraction removes the largest block of logic from `app.js`. Remaining cut: DOM-only glue (screen switching, form handlers) → `ui/composer.js`, per the original P4-2 scope.
-- **Proposed final split** (after Fase 10.1.1):
-  ```
-  pwa/
-    core/
-      cipherEngine.js   ← unchanged
-      secure-vault.js   ← unchanged
-      transport/        ← new (Fase 10.1.1)
-      receive/          ← new (Fase 10.1.1)
-    ui/
-      composer.js       ← enterComposer(), handleCipherSubmit(), handleSendButton()
-      screens.js        ← showScreen(), setStatus(), DOM helpers
-      settings.js       ← initSettings(), initSecuritySettings(), updateSecurityPanel()
-    app.js              ← boot sequence only: init(), resolve vault mode, delegate
-  ```
-- **Key boundary**: `core/` has zero DOM references; `ui/` has zero crypto/transport logic.
-- **Note**: `pwa/app.js` was 629 lines on 2026-08-01. Now at 732 lines — overdue. Fase 10.1.1 does the big cut; the remainder is much smaller.
+- **Resolved (partially) by Fase 10.1.1**: `core/transport/` and `core/receive/` extracted from `app.js`. The big cut is done. Remaining: DOM-only glue (screen switching, form handlers → `ui/composer.js`) — deferred to Fase 10.2.
 
 ---
 

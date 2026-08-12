@@ -17,42 +17,12 @@ TWA verification confirmed on device — "running in Chrome" toast no longer app
 8 tangos, 314 palabras únicas. Cobertura en texto operacional real: 100%.
 
 ### 5. P4-2 — Split de `app.js` en `core/` y `ui/`
-**Folded into Fase 10.1.1.** El transporte/recepción ya sale de `app.js` en ese paso. Lo que queda (`screen switching`, `form handlers` → `ui/composer.js`) es un corte mucho menor que se hace como parte de la misma secuencia. No es un paso separado.
+**Folded into Fase 10.1.1 ✅ Completado.** La capa de transport/receive salió de `app.js`. Lo que queda (screen switching, form handlers) es un corte menor que puede hacerse como parte de 10.2.
 
-### 6. Fase 10.1.1 — Transport layer: `sendDocument` + P4-2 folded in ← PRÓXIMO (tras P4-2)
-Ver diseño completo en `/root/JOB-sda2/CIFRADO-TANGOS/TRANSPORT_STEP/TRANSPORT_ARCHITECTURE.md` y los archivos JS del mismo directorio. Resumen:
+### 6. Fase 10.1.1 — Transport layer: `sendDocument` + P4-2 folded in ✅ Implementado
+`pwa/core/transport/` (types, chunked-text, document, server-bridge, index) y `pwa/core/receive/` (from-query-param, from-shared-file, from-server-push, index) creados. `app.js` actualizado: `sendCiphertext()` y `resolveIncoming()`. `deeplink.js` eliminado. `transport.test.mjs`: 28 tests nuevos. 53/53 JS pass.
 
-**Nueva estructura `core/`:**
-```
-pwa/core/
-  transport/          ← lado ENVÍO: ciphertext → llamadas Telegram API
-    types.js           contratos compartidos + límites Telegram
-    chunked-text.js    estrategia #1 (hoy) — pares con receive/from-query-param.js
-    document.js        estrategia #2 (nueva) — sendDocument, un solo mensaje
-    server-bridge.js   estrategia #3 (stub) — infraestructura propia (futuro)
-    index.js           selectTransport() / sendCiphertext() — único módulo
-                        que sabe que existen múltiples estrategias
-
-  receive/            ← lado RECEPCIÓN: fuente entrante → ciphertext string
-    from-query-param.js  lee ?c= (movido de deeplink.js)
-    from-shared-file.js  lee un .txt adjunto/compartido
-    from-server-push.js  (stub)
-    index.js             resolveIncoming() — único módulo que sabe que
-                          existen múltiples rutas de recepción
-```
-
-**Regla de selección** (`selectTransport`): si el deep-link URL del ciphertext cabe en ≤2048 bytes → `chunkedTextTransport` (comportamiento actual, sin cambios para mensajes cortos). Si no → `documentTransport` (un solo mensaje `.txt`, sin ensamblado manual).
-
-**Impacto en `app.js`:**
-- `handleSend()` llama `sendCiphertext(codigo, ctx)` en lugar de `enviarATelegram()`.
-- `init()` llama `resolveIncoming({loc, hist})` en lugar de `consumeDeepLink()`.
-- `pwa/deeplink.js` se elimina — su contenido queda en `chunked-text.js` y `from-query-param.js`.
-
-**Folds in P4-2:** el split de `app.js` queda automáticamente reducido porque toda la lógica de transport/receive ya salió. El resto del split (handlers DOM → `ui/composer.js`) es un corte mucho más pequeño.
-
-**Prerequisito:** ninguno — este es el próximo paso. P4-2 ya no es un prerequisito separado; está incluido en la secuencia de este trabajo.
-
-### 7. Fase 10.2 — Envío de imágenes (sin cifrar)
+### 7. Fase 10.2 — Envío de imágenes (sin cifrar) ← PRÓXIMO
 Una vez que `app.js` está dividido y `sendDocument` está implementado, agregar el selector de archivos y `sendPhoto`/`sendMediaGroup`. Las imágenes viajan sin cifrar en esta fase — intencional, documentado en la UI.
 
 ### 8. Fase 10.3 — Cifrado de imágenes

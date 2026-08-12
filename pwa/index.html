@@ -358,6 +358,11 @@
       </div>
 
       <p class="status" id="composer-status" role="status" aria-live="polite"></p>
+
+      <!-- Hidden file input for receiving ciphertext via document transport.
+           Activated by app.js when the user opens a .txt attachment from Telegram.
+           Also used as fallback before Web Share Target is fully wired. -->
+      <input type="file" id="open-file" accept=".txt,text/plain" hidden aria-hidden="true">
     </div>
 
     <div class="card">
