@@ -211,39 +211,33 @@ La gestión de credenciales en el browser está implementada en `secure-vault.js
 
 **Aperturas posteriores (uso diario):**
 1. `loadPayloadDirect()` → carga `{ tangos, salt }` desde IndexedDB.
-2. Cifrar con `cifrarMensaje()` (recordar `await` — es async) y enviar a Telegram via `enviarATelegram()`:
+2. Cifrar con `cifrarMensaje()` (recordar `await` — es async) y enviar a Telegram via `sendCiphertext()`:
 
 ```javascript
-// enviarATelegram() está en app.js. Usa chunkCipherText() de deeplink.js
-// para dividir automáticamente mensajes que superan el límite de 4096 chars.
-// El botón "Descifrar →" usa ?c= (query param, NO fragmento #c=) porque
-// Telegram Android elimina los fragmentos de URL antes de pasarlos al intent.
-// Solo se incluye ?c= cuando el URL codificado cabe en ≤2048 bytes (límite
-// de Telegram para URLs de botones). Para mensajes largos el botón abre la
-// app sin pre-cargar — el receptor copia el texto manualmente.
-// Ver ROADMAP.md Fase 10.1.1 para la solución definitiva con sendDocument.
+// sendCiphertext() está en pwa/core/transport/index.js.
+// Elige automáticamente la estrategia correcta:
+//   - Mensajes cortos (deep-link URL ≤ 2048 bytes): chunkedTextTransport
+//     → sendMessage con botón "Descifrar →" que pre-carga el campo.
+//   - Mensajes largos: documentTransport
+//     → sendDocument (archivo .txt adjunto), receptor abre con la app.
+// En ambos casos result.deepLinkCapable es siempre true — selectTransport()
+// garantiza que siempre se elige una estrategia que permite descifrar
+// sin copy/paste manual.
 
-import { chunkCipherText, buildDeepLink, buildSendMessageBody } from './deeplink.js';
+import { sendCiphertext } from './core/transport/index.js';
+import { resolveIncoming } from './core/receive/index.js';
 
-async function enviarATelegram(mensajeCifrado, botToken, chatId) {
-    const chunks = chunkCipherText(mensajeCifrado, 4096);
-    const deepLink = buildDeepLink(location.origin, location.pathname, location.search, mensajeCifrado);
-    const apiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+// Enviar:
+const result = await sendCiphertext(codigo, {
+    botToken, chatId,
+    origin: location.origin,
+    pathname: location.pathname,
+    search: location.search,
+});
 
-    for (let i = 0; i < chunks.length; i++) {
-        const isLast = i === chunks.length - 1;
-        const body = isLast
-            ? buildSendMessageBody(chunks[i], chatId, deepLink)
-            : { chat_id: chatId, text: chunks[i] };
-        const resp = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
-        if (!resp.ok) throw new Error(`Telegram error ${resp.status} (parte ${i + 1}/${chunks.length})`);
-    }
-    return chunks.length;
-}
+// Recibir (al abrir la app desde el botón "Descifrar →"):
+const pendingCipher = await resolveIncoming({ loc: location, hist: history });
+// pendingCipher es el ciphertext string, o null si no había ninguno pendiente.
 ```
 
-> Ver `pwa/deeplink.js` para `chunkCipherText`, `buildDeepLink` y `buildSendMessageBody`. Ver `pwa/secure-vault.js` para `sealForDevice`/`openDeviceVault` (PIN-gated, opt-in).
+> Ver `pwa/core/transport/` para las estrategias de envío. Ver `pwa/core/receive/` para las estrategias de recepción. Ver `pwa/secure-vault.js` para `sealForDevice`/`openDeviceVault` (PIN-gated, opt-in).

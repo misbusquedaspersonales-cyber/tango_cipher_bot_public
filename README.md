@@ -98,7 +98,7 @@ $ tango
 | `scripts/aliases/` | Comandos cortos de terminal: `tango` (abrir PWA), `tango-url` (copiar URL al clipboard), `tango-cli` (wrapper del CLI local). |
 | `.github/workflows/build-encrypted-bundle.yml` | GitHub Actions workflow de build (solo en el repo privado). |
 | `.github/workflows/drift-check.yml` | GitHub Actions workflow semanal: compara el `PRIVATE_CORE_COMMIT` pinneado contra el HEAD del repo privado y abre Issue automático si detecta drift. Requiere el secreto `PRIVATE_REPO_PAT`. |
-| `tests/` | 119 tests total once `private_core/` is populated: 53 JS (`tests/js/`) + 24 Python always-runnable (`test_build_encrypted_bundle.py` 5 + `test_telegram_client.py` 8 + `test_check_coverage.py` 11) + 43 Python requiring `private_core/` (`test_cipher_engine.py`: 33 original + 11 shared vectors). JS breakdown: `cipherEngine.test.mjs` 27 (16 fixed + 11 shared-vector loop), `pwa_e2e.test.mjs` 3, `transport.test.mjs` 23 (transport layer + receive). Run `python3 -m pytest tests/python/ -v` and `npm test` separately. |
+| `tests/` | 119 tests total once `private_core/` is populated: 53 JS (`tests/js/`) + 24 Python always-runnable (`test_build_encrypted_bundle.py` 5 + `test_telegram_client.py` 8 + `test_check_coverage.py` 11) + 43 Python requiring `private_core/` (`test_cipher_engine.py`: 33 original + 11 shared vectors). JS breakdown: `cipherEngine.test.mjs` 27 (16 fixed + 11 shared-vector loop), `pwa_e2e.test.mjs` 3, `transport.test.mjs` 24 (transport layer + receive + invariant). Run `python3 -m pytest tests/python/ -v` and `npm test` separately. |
 
 ## Setup del CLI (desarrollo / pruebas)
 

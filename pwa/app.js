@@ -353,11 +353,15 @@ async function handleSend() {
             pathname: location.pathname,
             search: location.search,
         });
-        setStatus(statusEl,
-            result.deepLinkCapable
-                ? "Enviado."
-                : "Enviado. El receptor debe abrir el archivo adjunto para descifrar.",
-            "success");
+        // selectTransport() guarantees deepLinkCapable is always true:
+        // chunkedTextTransport sets it when the button URL fits ≤2048 bytes,
+        // and documentTransport always sets it (receiver taps the .txt file).
+        // If this ever fires, a new transport was added without honouring the
+        // invariant — catch it early.
+        if (!result.deepLinkCapable) {
+            console.warn("[app] sendCiphertext returned deepLinkCapable=false — transport invariant violated.");
+        }
+        setStatus(statusEl, "Enviado.", "success");
     } catch (err) {
         setStatus(statusEl, err.message || "Error al enviar a Telegram.", "error");
     } finally {

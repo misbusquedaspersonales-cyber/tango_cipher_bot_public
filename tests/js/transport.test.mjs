@@ -18,7 +18,9 @@ import {
     chunkedTextTransport,
 } from '../../pwa/core/transport/chunked-text.js';
 import { documentTransport } from '../../pwa/core/transport/document.js';
-import { selectTransport } from '../../pwa/core/transport/index.js';
+import {
+    selectTransport, sendCiphertext,
+} from '../../pwa/core/transport/index.js';
 import { TELEGRAM_TEXT_MAX, TELEGRAM_BUTTON_URL_MAX } from '../../pwa/core/transport/types.js';
 import { resolveFromQueryParam } from '../../pwa/core/receive/from-query-param.js';
 import { resolveIncoming } from '../../pwa/core/receive/index.js';
@@ -262,4 +264,27 @@ test('resolveIncoming: ?c= takes priority over sharedFile', async () => {
     const fakeFile = { text: async () => fromFile };
     const result = await resolveIncoming({ loc, hist: makeHistory(), sharedFile: fakeFile });
     assert.equal(result, fromUrl);
+});
+
+// ---------- selectTransport invariant: deepLinkCapable always true ----------
+
+test('invariant: every transport always returns deepLinkCapable=true', async () => {
+    // Both strategies must honour the invariant that the receiver can reach
+    // plaintext without manual copy/paste. If a new transport breaks this,
+    // the console.warn in handleSend() will fire in production.
+    const shortCipher = '50-V01P02';
+    const longCipher = Array.from({ length: 300 }, (_, i) => `#${String(i).padStart(8,'0')}`).join('-');
+    const ctx = makeCtx({
+        fetchFn: async (url, opts) => ({
+            ok: true,
+            json: async () => ({}),
+        }),
+    });
+
+    const short = await sendCiphertext(shortCipher, ctx);
+    assert.ok(short.deepLinkCapable, 'chunkedTextTransport must set deepLinkCapable=true');
+
+    // documentTransport also needs a fetchFn that accepts FormData
+    const longResult = await sendCiphertext(longCipher, ctx);
+    assert.ok(longResult.deepLinkCapable, 'documentTransport must set deepLinkCapable=true');
 });
