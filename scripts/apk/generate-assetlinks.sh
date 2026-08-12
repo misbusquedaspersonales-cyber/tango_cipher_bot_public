@@ -26,10 +26,27 @@ else
   APK_DIR="$REPO_ROOT/tango-cifrado-apk"
 fi
 
-KEYSTORE_FILE="$APK_DIR/android.keystore"
-PASS_FILE="$APK_DIR/keystore-password.txt"
-ALIAS="${KEYSTORE_ALIAS:-android}"
+ROOT_WELLKNOWN="$REPO_ROOT/.well-known/assetlinks.json"
 PACKAGE_NAME="${PACKAGE_NAME:-com.tangocifrado.app}"
+ALIAS="${KEYSTORE_ALIAS:-android}"
+PASS_FILE="$APK_DIR/keystore-password.txt"
+
+# ── Keystore resolution — same priority as build-apk.sh ─────────────────────
+# 1. KEYSTORE_FILE env var (explicit override)
+# 2. ~/tango-signing/android.keystore (recommended out-of-repo location)
+# 3. $APK_DIR/android.keystore (legacy in-workspace path)
+if [ -z "${KEYSTORE_FILE:-}" ]; then
+  if [ -f "$HOME/tango-signing/android.keystore" ]; then
+    KEYSTORE_FILE="$HOME/tango-signing/android.keystore"
+  else
+    KEYSTORE_FILE="$APK_DIR/android.keystore"
+  fi
+fi
+
+# Prefer ~/tango-signing/keystore-password.txt for password fallback
+if [ -f "$HOME/tango-signing/keystore-password.txt" ]; then
+  PASS_FILE="$HOME/tango-signing/keystore-password.txt"
+fi
 
 ROOT_WELLKNOWN="$REPO_ROOT/.well-known/assetlinks.json"
 PWA_WELLKNOWN="$REPO_ROOT/pwa/.well-known/assetlinks.json"

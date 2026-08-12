@@ -11,9 +11,9 @@
 | `pwa/.well-known/assetlinks.json` | ✅ Publicado en GitHub Pages | Idéntico al anterior |
 | `pwa/manifest.json` | ✅ URLs absolutas | Requerido por TWA |
 
-**SHA-256 activo (keystore real):**
+**SHA-256 activo (keystore limpia `~/tango-signing/`):**
 ```
-37:9D:88:CF:A5:60:AC:58:48:91:88:E2:1A:39:F1:4D:7B:E6:33:C5:80:65:1D:43:68:07:38:E7:47:3A:E5:39
+90:17:F1:AA:90:6B:9C:C7:4E:AB:A5:33:B6:86:B3:66:EC:6F:91:73:D0:C0:36:CB:9B:B7:59:31:C2:70:E8:B6
 ```
 
 **Package name:** `com.tangocifrado.app`
@@ -39,7 +39,7 @@ SCOPE PWA:      /tango_cipher_bot_public/pwa/
 START URL:      /tango_cipher_bot_public/pwa/index.html?src=twa-apk
 
 SHA-256 CERTIFICATE FINGERPRINT:
-   37:9D:88:CF:A5:60:AC:58:48:91:88:E2:1A:39:F1:4D:7B:E6:33:C5:80:65:1D:43:68:07:38:E7:47:3A:E5:39
+   90:17:F1:AA:90:6B:9C:C7:4E:AB:A5:33:B6:86:B3:66:EC:6F:91:73:D0:C0:36:CB:9B:B7:59:31:C2:70:E8:B6
 ```
 
 Si perdés la keystore o su contraseña, tenés que generar una nueva identidad
@@ -56,7 +56,7 @@ https://developers.google.com/digital-asset-links/tools/generator
 
 Domain:              misbusquedaspersonales-cyber.github.io
 App package name:    com.tangocifrado.app
-SHA-256 fingerprint: 37:9D:88:CF:A5:60:AC:58:48:91:88:E2:1A:39:F1:4D:7B:E6:33:C5:80:65:1D:43:68:07:38:E7:47:3A:E5:39
+SHA-256 fingerprint: 90:17:F1:AA:90:6B:9C:C7:4E:AB:A5:33:B6:86:B3:66:EC:6F:91:73:D0:C0:36:CB:9B:B7:59:31:C2:70:E8:B6
 ```
 
 Click "Test statement" → tiene que aparecer ✅ Success.

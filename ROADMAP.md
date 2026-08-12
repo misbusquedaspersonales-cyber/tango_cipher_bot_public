@@ -209,7 +209,7 @@ Ventajas para este proyecto:
 - [x] Scripts de build: `scripts/apk/build-apk.sh`, `generate-keystore.sh`, `generate-assetlinks.sh`, `install-deps.sh`.
 - [x] APK firmado generado en `dist/apk/app-release-signed.apk` (1.1 MB) — firmado con `~/tango-signing/android.keystore` (fingerprint `90:17:F1:AA:...`).
 - [x] Distribución por sideload probada — APK enviado al cliente por email e instalado.
-- [ ] **`assetlinks.json` desactualizado** — aún publica fingerprint `37:9D:88:CF:...` (segunda keystore comprometida). Hay que regenerar con `generate-assetlinks.sh` apuntando a `~/tango-signing/android.keystore` y hacer push. Ver ROADMAP paso 2 y TROUBLESHOOTING.md Problema 15.
+- [x] `assetlinks.json` publicado en `pwa/.well-known/assetlinks.json` — fingerprint `90:17:F1:AA:...` (keystore limpia `~/tango-signing/`).
 
 #### Fase 9.2 — Icono, nombre y metadata Android ✅ Completado
 - [x] Nombre de app "Tango Cifrado" configurado en `twa-manifest.json`.
