@@ -279,6 +279,7 @@ function setMode(newMode) {
     $("#mode-cifrar").classList.toggle("is-active", mode === "cifrar");
     $("#mode-descifrar").classList.toggle("is-active", mode === "descifrar");
     $("#tango-field").hidden = mode !== "cifrar";
+    $("#open-file-row").hidden = mode !== "descifrar";
     $("#message-input").placeholder =
         mode === "cifrar" ? "Escribí el mensaje…" : "Pegá el código cifrado (ej: 50-V09P01-~20-…)";
     $("#message-label").textContent = mode === "cifrar" ? "Mensaje" : "Código cifrado";
@@ -619,6 +620,17 @@ async function init() {
     $("#run-action").addEventListener("click", handleRunAction);
     $("#copy-button").addEventListener("click", handleCopy);
     $("#send-button").addEventListener("click", handleSend);
+
+    // "Abrir archivo cifrado" button — visible in Descifrar mode.
+    // Triggers the hidden #open-file input so the receiver can open a .txt
+    // attachment sent via documentTransport (strategy #2).
+    const openFileButton = $("#open-file-button");
+    if (openFileButton) {
+        openFileButton.addEventListener("click", () => {
+            const input = $("#open-file");
+            if (input) input.click();
+        });
+    }
 
     // File input fallback for receiving ciphertext via shared .txt file
     // (document transport strategy). Works before Web Share Target is wired.
