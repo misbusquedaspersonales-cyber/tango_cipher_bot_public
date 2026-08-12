@@ -6,7 +6,8 @@
 |---|---|---|---|
 | 🟢 P3 (Low) | 1 | 0 | 1 |
 | 🔵 P4 (Refactor) | 1 | 0 | 1 |
-| **Total** | **2** | **0** | **2** |
+| 🔧 Maintenance | 1 | 0 | 1 |
+| **Total** | **3** | **0** | **3** |
 
 ---
 
@@ -45,3 +46,25 @@
   ```
 - **Key boundary**: `core/` has zero DOM references; `ui/` has zero crypto logic.
 - **Note**: `pwa/app.js` was 629 lines on 2026-08-01 when the "~600 lines, revisit" trigger was first hit. Now at 732 lines — the split is overdue. Scheduled before Fase 10.2 (image sending) in the ROADMAP priority order.
+
+---
+
+## 🔧 Maintenance
+
+### [ ] M-1: Keystore password reuses a known-compromised value
+
+- **File**: `~/tango-signing/keystore-password.txt`
+- **Problem**: The password for the clean keystore (`90:17:F1:AA:...`) is `SeVestiraDeFiesta` — the same password that was previously used with the second compromised keystore and is explicitly listed in `generate-keystore.sh`'s `KNOWN_COMPROMISED_PASSWORDS` array. The *keystore file itself* is clean (generated outside the workspace on 2026-08-04, never exported), but the password reuse means anyone who saw the old password could attempt to use it against this keystore if they ever obtained the file.
+- **Risk**: Low in practice — the keystore file is at `~/tango-signing/`, outside the workspace and never in any export. But the defence-in-depth argument for a unique password is sound.
+- **Fix**: Regenerate the keystore with a fresh password that has never appeared anywhere:
+  ```bash
+  # Delete the current keystore first (make sure you have the APK backed up)
+  rm ~/tango-signing/android.keystore ~/tango-signing/keystore-password.txt
+  cd ~/tango-signing
+  /root/JOB-sda2/CIFRADO-TANGOS/Tango/scripts/apk/generate-keystore.sh
+  # Then regenerate assetlinks.json — the new keystore has a different fingerprint
+  cd /root/JOB-sda2/CIFRADO-TANGOS/Tango/tango-cifrado-apk
+  ../scripts/apk/generate-assetlinks.sh
+  # Push assetlinks to both repos, rebuild and redistribute the APK
+  ```
+- **Note**: Regenerating the keystore means a new fingerprint → new `assetlinks.json` → new APK build → resend to client. Only do this when there's a convenient moment to redistribute. Not urgent.
