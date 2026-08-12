@@ -10,13 +10,13 @@ El orden siguiente está fijado por dependencias técnicas y por impacto en el u
 ### 2. Regenerar assetlinks.json con la keystore limpia ✅ Completado
 `assetlinks.json` actualizado con fingerprint `90:17:F1:AA:...`. Repo `misbusquedaspersonales-cyber.github.io` creado para servir el archivo en el root domain (requerido por Android DAL). Verificado vía `curl` — HTTP 200, `application/json`, fingerprint correcto.
 
-### 3. Verificar que el deep link abre el APK instalado, no el navegador ← PRÓXIMO
-**Prerequisito: paso 2 completado ✅.** Confirmar con Google DAL tool y en dispositivo real que el botón "Descifrar →" abre el APK instalado en lugar de Chrome.
+### 3. Verificar que el deep link abre el APK instalado, no el navegador ✅ Completado
+TWA verification confirmed on device — "running in Chrome" toast no longer appears. First launch after install shows the toast due to Android's async DAL verification; second launch confirms full TWA mode.
 
-### 4. Fase 2 — Ampliación del corpus (continua, en paralelo)
-Con solo 7 tangos muchas palabras comunes caen al fallback XOR hex. Es trabajo de contenido, no de código — se puede hacer en paralelo con cualquier otra fase.
+### 4. Fase 2 — Ampliación del corpus (continua, en paralelo) ✅ En curso
+8 tangos, 314 palabras únicas. Cobertura en texto operacional real: 100%.
 
-### 5. P4-2 — Split de `app.js` en `core/` y `ui/`
+### 5. P4-2 — Split de `app.js` en `core/` y `ui/` ← PRÓXIMO
 `app.js` está en 732 líneas. Antes de agregar el selector de imágenes (Fase 10.2) hay que hacer este split o el archivo se vuelve inmanejable.
 
 ### 6. Fase 10.2 — Envío de imágenes (sin cifrar)
