@@ -5,7 +5,7 @@
 El orden siguiente está fijado por dependencias técnicas y por impacto en el usuario real. No se trata de preferencias: cada ítem es prerequisito del siguiente.
 
 ### 1. Fase 10.1 — Chunking de mensajes largos ✅ Completado
-`chunkCipherText()` en `pwa/deeplink.js`. `enviarATelegram()` en `app.js` actualizado. 9 tests nuevos. 50/50 JS pass.
+`chunkCipherText()` en `pwa/deeplink.js`. `enviarATelegram()` en `app.js` actualizado. 53/53 JS pass. **Limitación:** UX rota para multi-chunk (receptor debe ensamblar manualmente). Reemplazar con `sendDocument` en Fase 10.1.1.
 
 ### 2. Regenerar assetlinks.json con la keystore limpia ✅ Completado
 `assetlinks.json` actualizado con fingerprint `90:17:F1:AA:...`. Repo `misbusquedaspersonales-cyber.github.io` creado para servir el archivo en el root domain (requerido por Android DAL). Verificado vía `curl` — HTTP 200, `application/json`, fingerprint correcto.
@@ -17,15 +17,18 @@ TWA verification confirmed on device — "running in Chrome" toast no longer app
 8 tangos, 314 palabras únicas. Cobertura en texto operacional real: 100%.
 
 ### 5. P4-2 — Split de `app.js` en `core/` y `ui/` ← PRÓXIMO
-`app.js` está en 732 líneas. Antes de agregar el selector de imágenes (Fase 10.2) hay que hacer este split o el archivo se vuelve inmanejable.
+`app.js` está en 732 líneas. Necesario antes de Fase 10.1.1 y 10.2.
 
-### 6. Fase 10.2 — Envío de imágenes (sin cifrar)
-Una vez que `app.js` está dividido, agregar el selector de archivos y `sendPhoto`/`sendMediaGroup`. Las imágenes viajan sin cifrar en esta fase — intencional, documentado en la UI.
+### 6. Fase 10.1.1 — Reemplazar chunking con `sendDocument` para mensajes largos
+Ver diseño completo en la sección Fase 10.1 más abajo. Prerequisito: P4-2.
 
-### 7. Fase 10.3 — Cifrado de imágenes
+### 7. Fase 10.2 — Envío de imágenes (sin cifrar)
+Una vez que `app.js` está dividido y `sendDocument` está implementado, agregar el selector de archivos y `sendPhoto`/`sendMediaGroup`. Las imágenes viajan sin cifrar en esta fase — intencional, documentado en la UI.
+
+### 8. Fase 10.3 — Cifrado de imágenes
 Completa el modelo de seguridad para mensajes con imágenes. Después de 10.2, no antes.
 
-### 8. Fase 9.3 — CI: APK generado automáticamente en cada release
+### 9. Fase 9.3 — CI: APK generado automáticamente en cada release
 Automatizar la generación del APK en GitHub Actions una vez que el flujo de contenido esté estable. No automatizar antes: bake un pipeline de CI alrededor de una keystore quemada es inútil.
 
 ### Lo que NO se hace (y por qué)
@@ -241,11 +244,31 @@ Permitir enviar artículos completos (texto largo) e imágenes por Telegram desd
 **Implementado en `pwa/deeplink.js` (`chunkCipherText`) y `pwa/app.js` (`enviarATelegram`, `handleSend`).**
 
 - `chunkCipherText(codigo, maxLen=4096)` — función pura exportada desde `deeplink.js`. Corta en límites de token (`-`), reserva 8 chars para el prefijo `[i/N]`. Fast-path: si el mensaje cabe en un mensaje, devuelve el array con el string original sin prefijo.
-- `enviarATelegram()` — envía los chunks secuencialmente. Solo el último lleva el `inline_keyboard` con "Descifrar →"; su deep-link apunta al ciphertext **completo**, no al chunk.
-- `handleSend()` — muestra progreso ("Enviando parte 1 de 3…") y resultado ("Enviado en 3 partes.").
-- 8 tests nuevos en `deeplink.test.mjs`. 50/50 JS pass.
+- `enviarATelegram()` — envía los chunks secuencialmente. El botón "Descifrar →" solo aparece en el último chunk, y únicamente cuando el ciphertext completo cabe en la URL del botón (≤2048 bytes incluyendo encoding). Para mensajes largos el botón abre la app sin pre-cargar — el receptor debe copiar el ciphertext manualmente.
+- 8 tests nuevos en `deeplink.test.mjs`. 53/53 JS pass.
 
-**Consideración de seguridad:** los chunks intermedios contienen fragmentos del ciphertext en texto plano en Telegram. Esto no rompe el cifrado pero expone el tamaño aproximado del mensaje original. Aceptable para el caso de uso actual.
+**Limitación conocida — UX rota para mensajes multi-chunk:**
+El receptor recibe N mensajes de texto fragmentados. Para descifrar tiene que copiar cada chunk, quitar el prefijo `[i/N]`, concatenarlos y pegar el resultado en el campo Descifrar. Nadie va a hacer eso en la práctica.
+
+**Solución correcta — Fase 10.1.1: usar `sendDocument` para ciphertexts largos:**
+
+En lugar de dividir el ciphertext en múltiples mensajes de texto, enviarlo como un archivo `.txt` adjunto via `sendDocument`. Esto resuelve todos los problemas de UX de una vez:
+
+- Sin chunking: un solo mensaje, sin prefijos `[i/N]`, sin ensamblado manual.
+- Sin límite de URL: el botón "Descifrar →" no necesita cargar el ciphertext en la URL — el receptor toca el archivo adjunto y la app lo lee.
+- Flujo de recepción: el receptor toca el archivo `.txt` en Telegram → se abre la app → la app lee el contenido del archivo via File API → pre-carga el campo Descifrar → un tap para descifrar.
+- `sendDocument` acepta hasta 50 MB — no hay límite práctico para artículos de texto cifrado.
+
+**Lógica de decisión propuesta:**
+- Ciphertext ≤ ~1200 chars (URL encoded ≤ 2048): `sendMessage` con botón `?c=` (flujo actual, sin cambios).
+- Ciphertext > ~1200 chars: `sendDocument` con archivo `.txt` + botón "Descifrar →" que abre la app (sin `?c=`).
+
+**Cambios necesarios:**
+- `app.js` — `enviarATelegram()`: añadir rama `sendDocument` para ciphertexts largos. El archivo se construye como `new Blob([codigo], {type: 'text/plain'})` y se sube via `multipart/form-data`. Eliminar la lógica de chunking para texto (puede mantenerse solo como fallback de emergencia).
+- `app.js` — lado receptor: cuando el receptor toca el archivo `.txt` desde Telegram, la app necesita poder leerlo. Esto requiere que el archivo se abra con la app como handler — posible via `<input type="file">` manual, o via Web Share Target API si se registra en el manifest. A definir en la implementación.
+- `pwa/manifest.json`: agregar `share_target` para que la app aparezca como destino al compartir el archivo desde Telegram.
+
+**Prerequisito de esta fase:** P4-2 (split de `app.js`) — agregar `sendDocument` a un archivo de 732 líneas lo haría inmanejable.
 
 ---
 
