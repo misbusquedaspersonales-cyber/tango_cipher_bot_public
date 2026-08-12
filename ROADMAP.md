@@ -44,6 +44,7 @@ Automatizar la generación del APK en GitHub Actions una vez que el flujo de con
 
 ## Fase 2: Ampliación del Corpus 🔄 En progreso
 - [x] Ampliar `tangos.json` de 2 a 7 tangos (versos auténticos + padding técnico marcado con `"padding": true`)
+- [x] Ampliar corpus de 7 a 8 tangos — tango 8 "El Mensajero" (composición propia, 12 versos). 193 → 314 palabras únicas. Cobertura en texto operacional real: 25% → 100%.
 - [ ] Continuar agregando tangos hasta cubrir vocabulario español común (~20+ tangos)
 - [x] Script utilitario para verificar cobertura de palabras contra un texto de prueba — `scripts/dev/check_coverage.py` + `tests/python/test_check_coverage.py`. Recreados (los originales nunca fueron commiteados). 11 tests, 11/11 pass.
 
