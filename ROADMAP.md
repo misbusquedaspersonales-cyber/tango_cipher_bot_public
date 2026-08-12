@@ -7,11 +7,11 @@ El orden siguiente está fijado por dependencias técnicas y por impacto en el u
 ### 1. Fase 10.1 — Chunking de mensajes largos ✅ Completado
 `chunkCipherText()` en `pwa/deeplink.js`. `enviarATelegram()` en `app.js` actualizado. 9 tests nuevos. 50/50 JS pass.
 
-### 2. Regenerar assetlinks.json con la keystore limpia ← PRÓXIMO (URGENTE)
-Las dos keystores generadas previamente están comprometidas — sus contraseñas quedaron expuestas vía workspace export (`Tango_compact.txt`). El APK distribuido al cliente hoy fue firmado con la keystore limpia de `~/tango-signing/` (fingerprint `90:17:F1:AA:...`, generada fuera del workspace), pero `assetlinks.json` todavía publica el fingerprint `37:9D:88:CF:...` de la segunda keystore quemada. Consecuencia directa: el botón "Descifrar →" abre Chrome en lugar del APK instalado. Fase 9.1 en este ROADMAP reclama `[x] Keystore generada fuera del repo — nunca comprometida` — esa afirmación era falsa hasta hoy. Ver TROUBLESHOOTING.md Problema 15 y PASOS_APK.md Paso 3.
+### 2. Regenerar assetlinks.json con la keystore limpia ✅ Completado
+`assetlinks.json` actualizado con fingerprint `90:17:F1:AA:...`. Repo `misbusquedaspersonales-cyber.github.io` creado para servir el archivo en el root domain (requerido por Android DAL). Verificado vía `curl` — HTTP 200, `application/json`, fingerprint correcto.
 
-### 3. Verificar que el deep link abre el APK instalado, no el navegador
-**Prerequisito: paso 2 completado.** Una vez que `assetlinks.json` refleje `90:17:F1:AA:...`, verificar con Google Digital Asset Links Tool y confirmar que el botón "Descifrar →" abre el APK. Sin el paso 2 esta verificación solo daría falsa confianza sobre una identidad quemada.
+### 3. Verificar que el deep link abre el APK instalado, no el navegador ← PRÓXIMO
+**Prerequisito: paso 2 completado ✅.** Confirmar con Google DAL tool y en dispositivo real que el botón "Descifrar →" abre el APK instalado en lugar de Chrome.
 
 ### 4. Fase 2 — Ampliación del corpus (continua, en paralelo)
 Con solo 7 tangos muchas palabras comunes caen al fallback XOR hex. Es trabajo de contenido, no de código — se puede hacer en paralelo con cualquier otra fase.

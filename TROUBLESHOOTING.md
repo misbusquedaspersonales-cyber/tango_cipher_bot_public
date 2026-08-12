@@ -448,39 +448,54 @@ curl -s -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
 
 ## Problema 15: El archivo `keystore-password.txt` aparece en exports del workspace (Tango_compact.txt o similar)
 
-### Qué está pasando
+### Qué pasó
 
-Existe una herramienta (o proceso de agente) que genera un dump compacto del workspace — `Tango_compact.txt` u otro archivo similar. Esta herramienta lee el filesystem directamente y **no respeta `.gitignore`**. Como resultado, `tango-cifrado-apk/keystore-password.txt` (y potencialmente `android.keystore`) quedan expuestos en ese export cada vez que se genera, independientemente de las reglas de `.gitignore`.
+Existía una herramienta (o proceso de agente) que generaba un dump compacto del workspace — `Tango_compact.txt` u otro archivo similar. Esta herramienta leía el filesystem directamente y **no respetaba `.gitignore`**. Dos keystores quedaron expuestas:
+- Keystore sandbox (contraseña `TangoCifrado-Sandbox-2026!`) — expuesta en el primer export.
+- Segunda keystore (contraseña `SeVestiraDeFiesta`) — expuesta en el segundo export.
 
-Esto ya ocurrió dos veces:
-- Con la keystore sandbox (contraseña `TangoCifrado-Sandbox-2026!`) — expuesta en el primer export.
-- Con la keystore "real" generada después (contraseña `SeVestiraDeFiesta`) — expuesta en el segundo export.
+### Solución aplicada ✅
 
-Ambas keystores deben considerarse comprometidas. Cualquier keystore generada dentro de este workspace sufrirá el mismo destino la próxima vez que se produzca un export.
+**Opción B implementada:** la keystore activa está en `~/tango-signing/`, fuera del workspace. `build-apk.sh` y `generate-assetlinks.sh` detectan esa ruta automáticamente. La herramienta de export solo escanea el workspace — no alcanza `~/tango-signing/`.
 
-### Por qué los parches de `.gitignore` no resuelven esto
+`assetlinks.json` fue regenerado con el fingerprint de la nueva keystore (`90:17:F1:AA:...`) y está publicado en:
+- `misbusquedaspersonales-cyber.github.io/.well-known/assetlinks.json` (root domain, requerido por DAL)
+- `tango_cipher_bot_public/pwa/.well-known/assetlinks.json` (espejo)
 
-Los `.gitignore` de git y de `tango-cifrado-apk/` solo afectan qué archivos rastrea git. La herramienta de export no usa git — lee el filesystem directamente. Son dos mecanismos independientes.
+`generate-keystore.sh` rechaza las dos contraseñas comprometidas conocidas si se pasan vía `KEYSTORE_PASS`.
 
-### La solución correcta (pendiente de implementar)
+---
 
-Dos caminos, cualquiera sirve:
+## Problema 16: DAL tool devuelve `ERROR_CODE_FETCH_ERROR` para `misbusquedaspersonales-cyber.github.io`
 
-**Opción A — Agregar una lista de exclusión propia a la herramienta de export.**
-La herramienta que genera `Tango_compact.txt` necesita su propio archivo de exclusión (equivalente a un `.exportignore`), con al menos estas rutas:
+### Qué pasó
 
+La herramienta de Google Digital Asset Links busca el archivo en:
 ```
-tango-cifrado-apk/android.keystore
-tango-cifrado-apk/keystore-password.txt
-tango-cifrado-apk/assetlinks.generated.json
-.env
+https://<host>/.well-known/assetlinks.json
+```
+donde `<host>` es el valor del campo `host` en `twa-manifest.json` — en este caso `misbusquedaspersonales-cyber.github.io`.
+
+Como esta es una GitHub Pages de **proyecto** (repo `tango_cipher_bot_public`), el root domain `https://misbusquedaspersonales-cyber.github.io/` devolvía 404. El archivo estaba publicado bajo `/tango_cipher_bot_public/.well-known/assetlinks.json`, que Android puede usar en algunos contextos, pero el DAL tool y la verificación TWA primaria usan el root.
+
+### Solución aplicada ✅
+
+Se creó el repo `misbusquedaspersonales-cyber.github.io` — un repo con ese nombre exacto se convierte automáticamente en la GitHub Pages raíz del usuario/org. Contiene únicamente:
+- `.well-known/assetlinks.json` — el fingerprint `90:17:F1:AA:...`
+- `.nojekyll` — para que Jekyll no procese los dotfiles
+- `index.html` — redirect a la PWA real
+
+Verificación:
+```bash
+curl -sI "https://misbusquedaspersonales-cyber.github.io/.well-known/assetlinks.json"
+# → HTTP/2 200, content-type: application/json
 ```
 
-**Opción B — Generar la keystore fuera del workspace.**
-Mover el material de firma a una carpeta fuera de `/root/JOB-sda2/CIFRADO-TANGOS/Tango/`, por ejemplo `~/tango-signing/`. La herramienta de export solo escanea el workspace; no alcanzaría esa ruta. `build-apk.sh` y el workflow de CI ya soportan apuntar a una ruta externa via `KEYSTORE_FILE`.
+### Si hay que actualizar el fingerprint en el futuro
 
-### Estado actual
+Actualizar en **tres lugares**:
+1. `tango_cipher_bot_public/.well-known/assetlinks.json`
+2. `tango_cipher_bot_public/pwa/.well-known/assetlinks.json`
+3. `misbusquedaspersonales-cyber.github.io/.well-known/assetlinks.json`
 
-- Ninguna keystore activa tiene contraseña segura en este workspace.
-- Los `assetlinks.json` publicados tienen el fingerprint de la segunda keystore (también comprometida). Antes de buildear un APK para distribución real, hay que generar una tercera keystore fuera del workspace (Opción B) y actualizar los `assetlinks.json`.
-- `generate-keystore.sh` ya rechaza la contraseña sandbox conocida (`TangoCifrado-Sandbox-2026!`) cuando se usa vía `KEYSTORE_PASS` — pero no puede proteger contra leaks por export.
+`generate-assetlinks.sh` actualiza los dos primeros automáticamente. El tercero hay que copiarlo a mano al repo raíz y hacer push.

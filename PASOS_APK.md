@@ -1,14 +1,15 @@
 # PASOS_APK — Estado y Referencia APK TWA (Fase 9)
 
-## Estado actual (2026-08-03, post-regeneración de keystore)
+## Estado actual (2026-08-12, keystore limpia + assetlinks corregidos + root Pages repo creado)
 
 | Artefacto | Estado | Nota |
 |---|---|---|
-| `tango-cifrado-apk/android.keystore` | ✅ Generada con contraseña real | RSA-2048, validez 10000 días |
-| `tango-cifrado-apk/keystore-password.txt` | ✅ En disco, modo 0600, gitignoreado | Contiene la contraseña real |
+| `~/tango-signing/android.keystore` | ✅ Limpia, fuera del workspace | RSA-2048, validez 10000 días |
+| `~/tango-signing/keystore-password.txt` | ✅ En disco, modo 0600, fuera del workspace | Nunca expuesta vía export |
 | `tango-cifrado-apk/twa-manifest.json` | ✅ En repo | packageId=com.tangocifrado.app |
-| `.well-known/assetlinks.json` | ✅ Publicado en GitHub Pages | SHA-256 nuevo (ver abajo) |
-| `pwa/.well-known/assetlinks.json` | ✅ Publicado en GitHub Pages | Idéntico al anterior |
+| `.well-known/assetlinks.json` | ✅ En `tango_cipher_bot_public` | SHA-256 `90:17:F1:AA:...` |
+| `pwa/.well-known/assetlinks.json` | ✅ En `tango_cipher_bot_public` | Idéntico al anterior |
+| `misbusquedaspersonales-cyber.github.io` repo | ✅ Creado y live | Sirve assetlinks en el root domain (requerido por DAL) |
 | `pwa/manifest.json` | ✅ URLs absolutas | Requerido por TWA |
 
 **SHA-256 activo (keystore limpia `~/tango-signing/`):**
@@ -18,11 +19,13 @@
 
 **Package name:** `com.tangocifrado.app`
 
-> ⚠️ La keystore previa (sandbox, SHA-256 `13:E4:E0:6B:...`) está quemada —
-> su contraseña (`TangoCifrado-Sandbox-2026!`) fue expuesta en logs y docs.
-> La nueva keystore fue generada interactivamente con una contraseña real que
-> nunca apareció en ningún export. Los `assetlinks.json` publicados ya tienen
-> el nuevo fingerprint.
+> ℹ️ Android verifica DAL contra `https://misbusquedaspersonales-cyber.github.io/.well-known/assetlinks.json`
+> (el root domain del `host` en `twa-manifest.json`). Ese archivo es servido por el repo
+> `misbusquedaspersonales-cyber.github.io`. El archivo en `tango_cipher_bot_public` es un espejo.
+>
+> ⚠️ Las dos keystores anteriores (sandbox `13:E4:E0:6B:...` y segunda `37:9D:88:CF:...`) están
+> quemadas — sus contraseñas quedaron expuestas vía workspace export. La keystore activa está en
+> `~/tango-signing/`, fuera del workspace, y nunca apareció en ningún export.
 
 ---
 
@@ -49,8 +52,15 @@ de app y todos los usuarios deben desinstalar y reinstalar el APK.
 
 ## Lo único que falta correr
 
-### Paso 1 — Verificar assetlinks con Google (OBLIGATORIO antes de buildear)
+### Paso 1 — Verificar assetlinks con Google ✅ Verificado
 
+El archivo está live en el root domain:
+```bash
+curl -s "https://misbusquedaspersonales-cyber.github.io/.well-known/assetlinks.json"
+# → HTTP 200, SHA-256 90:17:F1:AA:...
+```
+
+Para re-verificar con la herramienta oficial de Google:
 ```
 https://developers.google.com/digital-asset-links/tools/generator
 
@@ -59,14 +69,9 @@ App package name:    com.tangocifrado.app
 SHA-256 fingerprint: 90:17:F1:AA:90:6B:9C:C7:4E:AB:A5:33:B6:86:B3:66:EC:6F:91:73:D0:C0:36:CB:9B:B7:59:31:C2:70:E8:B6
 ```
 
-Click "Test statement" → tiene que aparecer ✅ Success.
-Si no: esperá 60s a que Pages termine el deploy y reintentá.
-
-También podés verificar con curl:
-```bash
-curl -s "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/.well-known/assetlinks.json"
-# → debe mostrar el SHA-256 37:9D:88:CF:... arriba
-```
+> ⚠️ El DAL tool busca el archivo en el **root domain** (`misbusquedaspersonales-cyber.github.io`),
+> no en la ruta del proyecto. Por eso se necesita el repo `misbusquedaspersonales-cyber.github.io`
+> separado. El mismo archivo en `tango_cipher_bot_public/.well-known/` lo usa Android internamente.
 
 ### Paso 2 — Instalar dependencias (una sola vez)
 
@@ -76,26 +81,20 @@ chmod +x scripts/apk/*.sh
 # Instala: Node.js 20, JDK 17, @bubblewrap/cli
 ```
 
-### Paso 3 — Generar una nueva keystore FUERA del workspace
+### Paso 3 — Keystore limpia ✅ Completado
 
-> ⚠️ Existe una herramienta que genera exports del workspace (`Tango_compact.txt`
-> u otro dump) que lee el filesystem directamente sin respetar `.gitignore`.
-> Dos keystores anteriores fueron expuestas por este mecanismo. Generá la
-> keystore en `~/tango-signing/`, fuera del workspace, para evitar el leak.
+La keystore activa está en `~/tango-signing/android.keystore`, generada fuera del workspace.
+`build-apk.sh` y `generate-assetlinks.sh` la detectan automáticamente (sin variables de entorno).
 
+Si alguna vez necesitás regenerarla:
 ```bash
 mkdir -p ~/tango-signing
 cd ~/tango-signing
 /root/JOB-sda2/CIFRADO-TANGOS/Tango/scripts/apk/generate-keystore.sh
-# Escribe ~/tango-signing/android.keystore y ~/tango-signing/keystore-password.txt
-```
-
-Luego regenerar los assetlinks con la nueva keystore:
-```bash
-KEYSTORE_FILE=~/tango-signing/android.keystore \
-  /root/JOB-sda2/CIFRADO-TANGOS/Tango/scripts/apk/generate-assetlinks.sh
-# Actualiza .well-known/assetlinks.json y pwa/.well-known/assetlinks.json
-cd /root/JOB-sda2/CIFRADO-TANGOS/Tango
+# Luego regenerar assetlinks:
+cd /root/JOB-sda2/CIFRADO-TANGOS/Tango/tango-cifrado-apk
+../scripts/apk/generate-assetlinks.sh
+# Copiar assetlinks.json al repo misbusquedaspersonales-cyber.github.io también.
 git add .well-known/assetlinks.json pwa/.well-known/assetlinks.json
 git commit -m "deploy(assetlinks): new keystore fingerprint"
 git push
