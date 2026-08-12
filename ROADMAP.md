@@ -5,28 +5,31 @@
 El orden siguiente está fijado por dependencias técnicas y por impacto en el usuario real. No se trata de preferencias: cada ítem es prerequisito del siguiente.
 
 ### 1. Fase 10.1 — Chunking de mensajes largos ✅ Completado
-`chunkCipherText()` en `pwa/deeplink.js`. `enviarATelegram()` en `app.js` actualizado. 8 tests nuevos. 50/50 JS pass.
+`chunkCipherText()` en `pwa/deeplink.js`. `enviarATelegram()` en `app.js` actualizado. 9 tests nuevos. 50/50 JS pass.
 
-### 2. Fase 2 — Ampliación del corpus (continua, en paralelo) ← PRÓXIMO
-Con solo 7 tangos, muchas palabras comunes caen al fallback XOR hex, que es criptográficamente más débil que las coordenadas de libro. Agregar tangos mejora la cobertura directamente. Es trabajo de contenido, no de código — se puede hacer en paralelo con cualquier otra fase.
+### 2. Regenerar assetlinks.json con la keystore limpia ← PRÓXIMO (URGENTE)
+Las dos keystores generadas previamente están comprometidas — sus contraseñas quedaron expuestas vía workspace export (`Tango_compact.txt`). El APK distribuido al cliente hoy fue firmado con la keystore limpia de `~/tango-signing/` (fingerprint `90:17:F1:AA:...`, generada fuera del workspace), pero `assetlinks.json` todavía publica el fingerprint `37:9D:88:CF:...` de la segunda keystore quemada. Consecuencia directa: el botón "Descifrar →" abre Chrome en lugar del APK instalado. Fase 9.1 en este ROADMAP reclama `[x] Keystore generada fuera del repo — nunca comprometida` — esa afirmación era falsa hasta hoy. Ver TROUBLESHOOTING.md Problema 15 y PASOS_APK.md Paso 3.
 
-### 3. P4-2 — Split de `app.js` en `core/` y `ui/`
-`app.js` está en 732 líneas y sigue creciendo. Antes de agregar el selector de imágenes (Fase 10.2) hay que hacer este split, o el archivo se vuelve inmanejable. El split también resuelve F-6 (extracción de `deeplink.js`) de forma natural.
+### 3. Verificar que el deep link abre el APK instalado, no el navegador
+**Prerequisito: paso 2 completado.** Una vez que `assetlinks.json` refleje `90:17:F1:AA:...`, verificar con Google Digital Asset Links Tool y confirmar que el botón "Descifrar →" abre el APK. Sin el paso 2 esta verificación solo daría falsa confianza sobre una identidad quemada.
 
-### 4. Verificar que el deep link abre el APK instalado, no el navegador
-El botón "Descifrar →" en Telegram debería abrir el APK directamente. Si `assetlinks.json` no está correctamente verificado, abre una pestaña de Chrome en su lugar, rompiendo la experiencia nativa. Verificar y corregir antes de agregar más features que dependan del flujo de recepción.
+### 4. Fase 2 — Ampliación del corpus (continua, en paralelo)
+Con solo 7 tangos muchas palabras comunes caen al fallback XOR hex. Es trabajo de contenido, no de código — se puede hacer en paralelo con cualquier otra fase.
 
-### 5. Fase 10.2 — Envío de imágenes (sin cifrar)
-Una vez que `app.js` está dividido, agregar el selector de archivos y `sendPhoto`/`sendMediaGroup` es trabajo limpio y acotado. Las imágenes viajan sin cifrar en esta fase — eso es intencional y se documenta en la UI.
+### 5. P4-2 — Split de `app.js` en `core/` y `ui/`
+`app.js` está en 732 líneas. Antes de agregar el selector de imágenes (Fase 10.2) hay que hacer este split o el archivo se vuelve inmanejable.
 
-### 6. Fase 10.3 — Cifrado de imágenes
-Completa el modelo de seguridad para mensajes con imágenes. Se hace después de 10.2, no antes — el diseño correcto depende de la experiencia real de uso de 10.2.
+### 6. Fase 10.2 — Envío de imágenes (sin cifrar)
+Una vez que `app.js` está dividido, agregar el selector de archivos y `sendPhoto`/`sendMediaGroup`. Las imágenes viajan sin cifrar en esta fase — intencional, documentado en la UI.
 
-### 7. Fase 9.3 — CI: APK generado automáticamente en cada release
-Una vez que el flujo de contenido (texto + imágenes) está estable, automatizar la generación del APK en GitHub Actions para que el cliente siempre descargue la última versión desde una URL fija.
+### 7. Fase 10.3 — Cifrado de imágenes
+Completa el modelo de seguridad para mensajes con imágenes. Después de 10.2, no antes.
+
+### 8. Fase 9.3 — CI: APK generado automáticamente en cada release
+Automatizar la generación del APK en GitHub Actions una vez que el flujo de contenido esté estable. No automatizar antes: bake un pipeline de CI alrededor de una keystore quemada es inútil.
 
 ### Lo que NO se hace (y por qué)
-**Transporte propio (app-to-app sin Telegram):** requiere un servidor propio o WebRTC P2P — rompe el costo $0, agrega infraestructura que hay que mantener, y resuelve un problema que no existe. El envío actual ya es silencioso (no abre Telegram). El único punto de fricción real es que el botón "Descifrar →" abra el navegador en lugar del APK, que se resuelve en el punto 4 de arriba.
+**Transporte propio (app-to-app sin Telegram):** requiere un servidor propio o WebRTC P2P — rompe el costo $0, agrega infraestructura que hay que mantener, y resuelve un problema que no existe. El envío actual ya es silencioso (no abre Telegram). El único punto de fricción real es el botón "Descifrar →" que abre Chrome en lugar del APK, resuelto en el paso 3.
 
 ---
 
@@ -204,8 +207,9 @@ Ventajas para este proyecto:
 - [x] `assetlinks.json` publicado en `pwa/.well-known/assetlinks.json`.
 - [x] Keystore generada fuera del repo en `~/tango-signing/` (nunca comprometida).
 - [x] Scripts de build: `scripts/apk/build-apk.sh`, `generate-keystore.sh`, `generate-assetlinks.sh`, `install-deps.sh`.
-- [x] APK firmado generado en `dist/apk/app-release-signed.apk` (1.1 MB).
+- [x] APK firmado generado en `dist/apk/app-release-signed.apk` (1.1 MB) — firmado con `~/tango-signing/android.keystore` (fingerprint `90:17:F1:AA:...`).
 - [x] Distribución por sideload probada — APK enviado al cliente por email e instalado.
+- [ ] **`assetlinks.json` desactualizado** — aún publica fingerprint `37:9D:88:CF:...` (segunda keystore comprometida). Hay que regenerar con `generate-assetlinks.sh` apuntando a `~/tango-signing/android.keystore` y hacer push. Ver ROADMAP paso 2 y TROUBLESHOOTING.md Problema 15.
 
 #### Fase 9.2 — Icono, nombre y metadata Android ✅ Completado
 - [x] Nombre de app "Tango Cifrado" configurado en `twa-manifest.json`.
