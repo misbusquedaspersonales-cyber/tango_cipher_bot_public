@@ -43,7 +43,7 @@ Automatizar la generación del APK en GitHub Actions una vez que el flujo de con
 - [x] `main.py` — CLI interactivo, delega HTTP a `telegram_client`, errores de crypto capturados
 - [x] Credenciales gestionadas via `.env` con `python-dotenv`
 - [x] `.env.example`, `.gitignore`, `TROUBLESHOOTING.md`, `CHANGELOG.md`, `README.md`, `ROADMAP.md`
-- [x] Suite de tests: 64 tests cubriendo cifrado, descifrado, round-trip, dígitos, SALT por entorno, `iter_tangos`, pipeline de bundle, errores de red y bóveda de seguridad. (45 Python + 19 JS; los 32 tests de `test_cipher_engine.py` requieren `private_core/` poblado vía `scripts/dev/setup_private_core.sh`.)
+- [x] Suite de tests: 119 tests en total (53 JS + 24 Python siempre ejecutables + 43 Python que requieren `private_core/`). Ver `README.md` para el desglose completo.
 
 ## Fase 2: Ampliación del Corpus 🔄 En progreso
 - [x] Ampliar `tangos.json` de 2 a 7 tangos (versos auténticos + padding técnico marcado con `"padding": true`)
@@ -77,7 +77,7 @@ El pipeline de despliegue los cifra antes de publicar.
 - [x] Tokenización Unicode correcta con `/\p{L}+/gu` (fix bug ASCII-only de `\w`)
 - [x] Dígitos agrupados como un único token `#hex` en vez de uno por carácter
 - [x] Soporte de versos `padding` en formato `{padding: true, palabras: [...]}`
-- [x] Tests unitarios JS de round-trip cifrado/descifrado (`tests/js/cipherEngine.test.mjs`, 15 tests)
+- [x] Tests unitarios JS de round-trip cifrado/descifrado (`tests/js/cipherEngine.test.mjs`, 27 tests — 16 fijos + 11 shared-vector loop)
 
 ## Fase 5: PWA — Interfaz y Almacenamiento Local ✅ Completado
 - [x] `secure-vault.js` — gestión de credenciales en el browser con dos capas:

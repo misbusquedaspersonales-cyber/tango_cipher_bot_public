@@ -256,12 +256,12 @@ Si aún así sigue con barra URL → revisá `apple-mobile-web-app-capable` meta
 
 ### 12.4 Síntoma: Modo Avión no funciona o muestra error críptico "HTTP 0"
 
-Hay **dos escenarios** deliberadamente distintos. El parche de caché v5→v8 arregló el error "HTTP 0 sin contexto". Si volvés a verlo, es que tu teléfono aún tiene un Service Worker **viejo** (versión pre-v8).
+Hay **dos escenarios** deliberadamente distintos. El parche de caché v5→v10 arregló el error "HTTP 0 sin contexto". Si volvés a verlo, es que tu teléfono aún tiene un Service Worker **viejo** (versión pre-v10).
 
 **Escenario esperado A — Bundle ya cacheado (uso diario offline):**
 App que ya abriste y desbloqueaste una vez → en Modo Avión abre instantáneo, compositor funciona sin conexión. Si no pasa:
 - DevTools → Application → Service Workers → Bypass for network OFF (sino sw está desactivado)
-- DevTools → Application → Cache Storage → debe existir `tango-cifrado-v8-shell` y `tango-cifrado-v8-bundle`. Si los nombres dicen `v5` o no hay bundle cacheado → te falta 1 vez haber abierto con internet.
+- DevTools → Application → Cache Storage → debe existir `tango-cifrado-v10-shell` y `tango-cifrado-v10-bundle`. Si los nombres dicen `v5` o no hay bundle cacheado → te falta 1 vez haber abierto con internet.
 
 **Escenario esperado B — Sin bundle + Sin red (verdadero primer run en avión):**
 Aparece mensaje en **español claro**, no un HTTP 0 críptico:
@@ -319,10 +319,10 @@ git status --short index.html go.html pwa/go.html
 python3 scripts/dev/check_pwa_assets.py
 # → OK: "todos los assets referenciados existen..."
 
-# 4) ¿Test suite pública pasa (13 Python + 19 JS)?
-python3 -m pytest tests/python/test_build_encrypted_bundle.py tests/python/test_telegram_client.py -q
+# 4) ¿Test suite pública pasa (24 Python always-runnable + 53 JS)?
+python3 -m pytest tests/python/test_build_encrypted_bundle.py tests/python/test_telegram_client.py tests/python/test_check_coverage.py -q
 npm test
-# → OK: 13 passed / 19 pass
+# → OK: 24 passed / 53 pass
 
 # 5) ¿Bundle schema correcto y generated_at nuevo?
 python3 -c '

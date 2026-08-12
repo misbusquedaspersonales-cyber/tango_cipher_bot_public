@@ -30,7 +30,7 @@ En iPhone Safari: Compartir → Agregar a pantalla de inicio. En Android Chrome:
 
 ## ✅ Checklist de regresión — Release 2026-07-31 (caché + short URLs)
 
-Este checklist **no es genérico**: los 7 puntos ejercitan específicamente los cambios del parche caché del 2026-07-31 (service worker rewrite, CACHE_VERSION v5→v8, fallback offline distinguible X-Tango-Offline, redirects de raíz). Si algo falla acá, el deploy no pasa.
+Este checklist **no es genérico**: los 7 puntos ejercitan específicamente los cambios del parche caché del 2026-07-31 (service worker rewrite, CACHE_VERSION v5→v10, fallback offline distinguible X-Tango-Offline, redirects de raíz). Si algo falla acá, el deploy no pasa.
 
 ### 0. Pre-requisito: los redirects de raíz están pusheados
 
@@ -107,8 +107,8 @@ Procedimiento real sobre instalación vieja ya existente en el teléfono:
 2. Abrir la app, esperar ~5s (Chrome checkea updates de SW en cada navigation).
 3. **Force-close completo**. Reabrir 1 vez. (Esto es: primera apertura → update check encuentra nuevo SW, `install` + `skipWaiting`; cierre → segunda apertura → `activate` corre y purga.)
 4. En DevTools desktop, pestaña Application → Service Workers:
-   - ✅ El SW `tango-cifrado-v8` figura **activated & running** (no "waiting")
-   - ✅ Storage → Caches: solo deberían aparecer `tango-cifrado-v8-shell`, `tango-cifrado-v8-bundle`, `tango-cifrado-v8-runtime`
+   - ✅ El SW `tango-cifrado-v10` figura **activated & running** (no "waiting")
+   - ✅ Storage → Caches: solo deberían aparecer `tango-cifrado-v10-shell`, `tango-cifrado-v10-bundle`, `tango-cifrado-v10-runtime`
    - ❌ Si aún aparece `tango-cifrado-v5-*` o `v6-*` → `clients.claim()` o `skipWaiting()` no se ejecutó. Revisar Consola por mensajes `[SW activate] purged N old caches.` (lo agrega el install/activate handlers).
 
 ### 6. Envío Telegram real desde datos móviles

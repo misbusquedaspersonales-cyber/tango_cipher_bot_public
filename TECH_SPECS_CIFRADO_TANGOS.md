@@ -216,9 +216,12 @@ La gestión de credenciales en el browser está implementada en `secure-vault.js
 ```javascript
 // enviarATelegram() está en app.js. Usa chunkCipherText() de deeplink.js
 // para dividir automáticamente mensajes que superan el límite de 4096 chars.
-// Solo el último chunk lleva el botón "Descifrar →" con el ciphertext completo
-// en el fragmento (#c=...) para que el receptor pueda descifrar en un tap.
-// Retorna el número de chunks enviados (1 para mensajes cortos).
+// El botón "Descifrar →" usa ?c= (query param, NO fragmento #c=) porque
+// Telegram Android elimina los fragmentos de URL antes de pasarlos al intent.
+// Solo se incluye ?c= cuando el URL codificado cabe en ≤2048 bytes (límite
+// de Telegram para URLs de botones). Para mensajes largos el botón abre la
+// app sin pre-cargar — el receptor copia el texto manualmente.
+// Ver ROADMAP.md Fase 10.1.1 para la solución definitiva con sendDocument.
 
 import { chunkCipherText, buildDeepLink, buildSendMessageBody } from './deeplink.js';
 
