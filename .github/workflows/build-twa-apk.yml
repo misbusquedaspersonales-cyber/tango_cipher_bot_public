@@ -215,12 +215,13 @@ jobs:
           mkdir -p ~/.bubblewrap
           printf '{\n  "jdkPath": "%s",\n  "androidSdkPath": "%s"\n}\n' \
             "$JAVA_HOME" "$ANDROID_SDK_ROOT" > ~/.bubblewrap/config.json
-          cat ~/.bubblewrap/config.json  # debug: show what was created
           
-          # Debug: check Android SDK structure
-          echo "=== Android SDK structure ===" && ls -la "$ANDROID_SDK_ROOT" || echo "SDK dir not found"
-          echo "=== cmdline-tools ===" && ls -la "$ANDROID_SDK_ROOT/cmdline-tools" 2>/dev/null || echo "no cmdline-tools"
-          echo "=== tools ===" && ls -la "$ANDROID_SDK_ROOT/tools" 2>/dev/null || echo "no tools"
+          # Fix Android SDK structure for bubblewrap compatibility
+          # Bubblewrap expects tools/bin/sdkmanager but modern SDK has cmdline-tools/latest/bin/
+          if [ ! -d "$ANDROID_SDK_ROOT/tools" ] && [ -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
+            echo "Creating tools symlink for bubblewrap compatibility..."
+            ln -s "$ANDROID_SDK_ROOT/cmdline-tools/latest" "$ANDROID_SDK_ROOT/tools"
+          fi
           
           bubblewrap build --skipPwaValidation
         env:
