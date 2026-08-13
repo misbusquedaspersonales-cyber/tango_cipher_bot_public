@@ -187,6 +187,10 @@ async function handleUnlockSubmit(event) {
             showBundleGeneratedAt(bundle.generated_at);
         }
 
+        // Store generated_at inside the payload so the corpus-freshness
+        // check in init() can detect when a newer bundle has been deployed.
+        payload.bundle_generated_at = bundle.generated_at || null;
+
         setVaultMode("direct");
         await savePayloadDirect(payload);
         claveInput.value = "";
@@ -384,11 +388,51 @@ function showBundleGeneratedAt(iso) {
     bundleInfo.textContent = `Corpus actualizado el ${texto}.`;
 }
 
-// Runs on every app load, unlock or frictionless alike. generated_at sits in
-// the bundle's plaintext metadata, outside the AES-GCM ciphertext -- so this
-// can check "is there a newer corpus on the server?" without touching
-// CLAVE_DESPLIEGUE or re-deriving any key. Fails silently offline; whatever
-// was last known (from localStorage) stays displayed.
+/**
+ * Fetches the bundle's plaintext metadata and compares its generated_at
+ * against what's stored in the local payload. If the server has a newer
+ * bundle, wipes IndexedDB and localStorage so init() falls through to the
+ * unlock screen and the user re-enters CLAVE_DESPLIEGUE to get the updated
+ * corpus. Fails silently when offline — stale corpus is better than no app.
+ */
+async function checkBundleFreshness() {
+    try {
+        const resp = await fetch(BUNDLE_URL, { cache: "no-cache" });
+        if (!resp.ok) return;
+        const bundle = await resp.json();
+        const serverTs = bundle.generated_at;
+        if (!serverTs) return;
+
+        // Read the stored timestamp from whichever storage mode is active.
+        let storedTs = null;
+        if (vaultMode === "pin") {
+            const sealed = await loadSealedVault();
+            // Can't open the sealed vault without the PIN here — read the
+            // stored generated_at from localStorage as a proxy instead.
+            storedTs = localStorage.getItem(BUNDLE_GENERATED_AT_KEY);
+        } else {
+            const stored = await loadPayloadDirect();
+            storedTs = stored && stored.bundle_generated_at
+                ? stored.bundle_generated_at
+                : localStorage.getItem(BUNDLE_GENERATED_AT_KEY);
+        }
+
+        if (storedTs && serverTs > storedTs) {
+            // Newer bundle on server — wipe local corpus so init() re-prompts.
+            await deletePayloadDirect();
+            await deleteSealedVault();
+            localStorage.removeItem(BUNDLE_GENERATED_AT_KEY);
+            setVaultMode("direct");
+        }
+    } catch {
+        // Offline or fetch error — leave local storage untouched.
+    }
+}
+
+// Runs on every app load. generated_at sits in the bundle's plaintext
+// metadata, outside the AES-GCM ciphertext -- so this can update the
+// displayed corpus date without touching CLAVE_DESPLIEGUE. Fails silently
+// offline; whatever was last known (from localStorage) stays displayed.
 async function refreshBundleGeneratedAt() {
     try {
         const resp = await fetch(BUNDLE_URL, { cache: "no-cache" });
@@ -663,12 +707,17 @@ async function init() {
     initSettings();
     initSecuritySettings();
 
-    // Fire-and-forget: checks whether a newer bundle exists on the server,
-    // on both the first-run and frictionless paths alike. Never awaited --
-    // this must not delay showing any of the three screens below.
-    refreshBundleGeneratedAt();
-
     vaultMode = getVaultMode();
+
+    // Check if the server has a newer bundle than what's stored locally.
+    // generated_at lives in the bundle's plaintext metadata (outside AES-GCM),
+    // so we can compare without CLAVE_DESPLIEGUE. If the server bundle is
+    // newer, wipe local storage and force re-unlock so the user gets the
+    // updated corpus (e.g. a new tango was added).
+    await checkBundleFreshness();
+
+    // Fire-and-forget: keeps the displayed corpus date up to date in settings.
+    refreshBundleGeneratedAt();
 
     if (vaultMode === "pin" && (await hasSealedVault())) {
         showScreen("pin-unlock");
