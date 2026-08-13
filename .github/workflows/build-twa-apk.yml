@@ -154,7 +154,8 @@ jobs:
             echo "✅ twa-manifest.json exists, but checking if Android project exists..."
             if [ ! -f gradlew ]; then
               echo "⚠️ gradlew missing - regenerating Android project from twa-manifest.json"
-              bubblewrap init --manifest ${{ env.MANIFEST_URL }}
+              # bubblewrap init also prompts, so pipe answers: Y (update to latest spec), n (no regenerate)
+              printf 'Y\nn\n' | bubblewrap init --manifest ${{ env.MANIFEST_URL }}
             else
               echo "✅ Android project already exists"
             fi
