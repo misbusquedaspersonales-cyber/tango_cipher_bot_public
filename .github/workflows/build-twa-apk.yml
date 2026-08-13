@@ -116,8 +116,8 @@ jobs:
           # JDK 17 is already available via setup-java@v4 above; bubblewrap
           # finds it at runtime through JAVA_HOME, not through postinstall.
           npm install -g @bubblewrap/cli@${{ env.BUBBLEWRAP_VERSION }} --ignore-scripts
-          # Verify the binary is accessible and functional
-          bubblewrap --version
+          # Note: Don't run `bubblewrap --version` here — it also triggers the JDK prompt.
+          # The binary will be validated when `bubblewrap build` runs later.
 
       # ---------- Android SDK (Bubblewrap lo necesita para Gradle) ----------
       - name: Setup Android SDK
