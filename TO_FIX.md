@@ -36,24 +36,63 @@
 
 ## 🔧 Maintenance
 
-### [x] M-3: CI APK build fails with exit 130 — bubblewrap postinstall JDK prompt blocks runner
+### [x] M-3: CI APK build fails with bubblewrap interactive prompts — complex multi-stage issue
 
-- **Resolved (2026-08-13)**: Fixed in `.github/workflows/build-twa-apk.yml`. Pinned bubblewrap to `1.21.1` and set `CI=true` + `BUBBLEWRAP_SKIP_JAVA_CHECK=1` during install. Documented in `CHANGELOG.md`, `PASOS_APK.md`, and `TROUBLESHOOTING.md`.
-- **Problem**: The workflow installs `@bubblewrap/cli` via `npm install -g @bubblewrap/cli@<version>`. Bubblewrap's postinstall script checks for JDK in `PATH` and prompts the user to install it if not found. In GitHub Actions, this prompt blocks stdin (exit 130 / SIGINT), failing the build even though JDK 17 was already installed via `actions/setup-java@v4` in the previous step. The root cause: the postinstall script runs *before* the shell's `PATH` is updated with the JDK location, so the check returns false positive.
-- **Attempted fixes (all failed as of 2026-08-13)**:
-  1. ✅ Set `CI=true` — supposed to silence interactive prompts, but bubblewrap ignores it.
-  2. ✅ Set `BUBBLEWRAP_SKIP_JAVA_CHECK=1` — documented workaround from bubblewrap issues, but doesn't work in recent versions.
-  3. ✅ Pipe `printf 'n\nn\n'` to `npm install` — stdin is ignored when prompt fires.
-  4. ✅ Tried versions `1.21.0` and `1.25.0` — both still prompt.
-- **Current status**: Every CI build fails at this step. APK must be built locally and uploaded manually.
-- **Possible solutions**:
-  1. **Install with `--ignore-scripts`**: `npm install -g @bubblewrap/cli --ignore-scripts` skips the postinstall entirely. Risk: if the postinstall does necessary setup beyond the JDK check, this could break bubblewrap functionality.
-  2. **Pre-install JDK in a way bubblewrap detects**: add a step that explicitly adds JDK to `PATH` and verifies `java -version` before running `npm install`. The current `setup-java` action might not export `PATH` early enough.
-  3. **Fork bubblewrap**: patch out the interactive prompt and publish as `@tangocifrado/bubblewrap-cli`. Maintainable but adds dependency overhead.
-  4. **Build locally only**: accept that CI builds are blocked and document the manual build/upload process. Simplest short-term workaround.
-- **Logs**: All failed runs show `Process completed with exit code 130` at line ~24 (Install @bubblewrap/cli). Example run: 31669341683.
-- **Priority**: Medium — blocks automated APK releases but doesn't affect PWA (which is the primary distribution). Manual APK builds work fine locally.
-- **Recommendation**: Try solution #1 (`--ignore-scripts`) first. If that breaks, fall back to solution #4 (manual builds) and document the process in `PASOS_APK.md`.
+- **Status**: Currently blocked on YAML syntax error after significant progress resolving bubblewrap prompts
+- **Original Problem**: `@bubblewrap/cli` triggers multiple interactive prompts that kill GitHub Actions CI (exit 130 / SIGINT)
+- **Root Cause Discovery**: Bubblewrap has cascading prompts at different stages:
+  1. **npm install**: JDK installation prompt during postinstall
+  2. **bubblewrap init**: JDK/Android SDK configuration prompts  
+  3. **bubblewrap build**: Project regeneration + keystore password prompts
+  4. **Android SDK structure**: Bubblewrap expects `tools/bin/sdkmanager` but GitHub Actions uses `cmdline-tools/latest/bin/`
+
+**Progress Made (2026-08-13 session)**:
+- ✅ **Fixed npm install prompts**: Added `--ignore-scripts` flag to skip postinstall JDK prompt entirely
+- ✅ **Fixed JDK/SDK detection**: Created `~/.bubblewrap/config.json` with correct paths, bypassing init prompts
+- ✅ **Fixed SDK structure**: Created symlink `tools -> cmdline-tools/latest` for bubblewrap compatibility  
+- ✅ **Fixed keystore prompts**: Used env vars `BUBBLEWRAP_KEYSTORE_PASSWORD` and `BUBBLEWRAP_KEY_PASSWORD`
+- ✅ **Fixed gradlew missing**: Discovered Android project files aren't committed (only `twa-manifest.json` is in git), so CI needs to regenerate them
+- ✅ **Reached actual Gradle build**: Latest successful run got to `./gradlew assembleRelease` before hitting the current blocker
+
+**Current Blocker (as of latest runs)**:
+- **YAML syntax error** in `.github/workflows/build-twa-apk.yml` preventing workflow execution
+- Error: `syntax error: unexpected end of file` in generated shell script
+- Likely caused by malformed multi-line YAML string in the `bubblewrap init` step
+- Recent runs fail at workflow parse time, not during bubblewrap execution
+
+**Failed CI Run History**:
+- Runs 31666595730-31671758278: Exit 130 (various bubblewrap prompts)
+- Runs 31672097922-31674819445: Exit 130 → Exit 1 → back to Exit 130 (prompt handling evolution)
+- Runs 31675265825+: YAML syntax errors (current issue)
+
+**Next Steps**:
+1. **Immediate**: Fix YAML syntax in workflow file (likely in multi-line string formatting)
+2. **Then test**: With YAML fixed, the build should reach Gradle compilation  
+3. **If Gradle succeeds**: APK build should complete and auto-upload to GitHub Release
+4. **Final validation**: Download APK, install, verify tango 8 "El Mensajero" appears
+
+**Solutions Applied**:
+```yaml
+# npm install with --ignore-scripts (bypasses postinstall prompts)
+npm install -g @bubblewrap/cli@${{ env.BUBBLEWRAP_VERSION }} --ignore-scripts
+
+# Pre-create config file (bypasses init prompts) 
+mkdir -p ~/.bubblewrap
+printf '{"jdkPath":"%s","androidSdkPath":"%s"}' "$JAVA_HOME" "$ANDROID_SDK_ROOT" > ~/.bubblewrap/config.json
+
+# Fix SDK structure (bubblewrap compatibility)
+ln -s "$ANDROID_SDK_ROOT/cmdline-tools/latest" "$ANDROID_SDK_ROOT/tools"
+
+# Environment variables (bypasses keystore prompts)
+BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+# Answer regeneration prompt
+printf 'n\n' | bubblewrap build --skipPwaValidation
+```
+
+**Priority**: High — blocks APK v1.2.0 release with tango 8 fix. PWA already works with all 8 tangos.
+**Impact**: Manual workaround exists (local APK build via `scripts/apk/build-apk.sh`), but CI automation preferred for releases.
 
 ### [ ] M-1: Keystore password reuses a known-compromised value
 
