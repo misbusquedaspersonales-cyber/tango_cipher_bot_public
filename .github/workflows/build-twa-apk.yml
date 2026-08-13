@@ -165,46 +165,47 @@ jobs:
             # requiere interacción; para CI es más robusto generar el JSON
             # con los campos obligatorios. Bubblewrap lo lee para build.
             cat > twa-manifest.json <<'TWAEOF'
-          {
-            "packageId": "__PACKAGE_ID__",
-            "host": "misbusquedaspersonales-cyber.github.io",
-            "name": "Tango Cifrado",
-            "launcherName": "Tango Cifrado",
-            "themeColor": "#1a110f",
-            "backgroundColor": "#1a110f",
-            "navigationColor": "#1a110f",
-            "navigationColorDark": "#0a0605",
-            "navigationDividerColor": "#2a1a15",
-            "startUrl": "/tango_cipher_bot_public/pwa/index.html?src=twa-apk",
-            "iconUrl": "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/icons/icon-512.png",
-            "maskableIconUrl": "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/icons/icon-maskable-512.png",
-            "display": "standalone",
-            "orientation": "portrait",
-            "minSdkVersion": 21,
-            "targetSdkVersion": 34,
-            "serviceAccountJsonFile": "",
-            "fingerprints": [],
-            "enableNotifications": false,
-            "enableGeolocation": false,
-            "enableSiteSettingsShortcut": true,
-            "isChromeOSOnly": false,
-            "isMetaQuery": false,
-            "retainedBundles": [],
-            "versionCode": 1,
-            "versionName": "1.0.0",
-            "signingKey": {
-              "path": "./android.keystore",
-              "alias": "__ALIAS__"
-            },
-            "splashScreenFadeOutDuration": 300
-          }
-          TWAEOF
-          PACKAGE_NAME="${PACKAGE_NAME:-com.tangocifrado.app}"
-          ALIAS="${ANDROID_KEY_ALIAS:-android}"
-          sed -i "s/__PACKAGE_ID__/$PACKAGE_NAME/" twa-manifest.json
-          sed -i "s/__ALIAS__/$ALIAS/"                 twa-manifest.json
-          echo "✅ twa-manifest.json generado en CI (package=$PACKAGE_NAME, alias=$ALIAS)"
-          cat twa-manifest.json | head -n 25
+{
+  "packageId": "__PACKAGE_ID__",
+  "host": "misbusquedaspersonales-cyber.github.io",
+  "name": "Tango Cifrado",
+  "launcherName": "Tango Cifrado",
+  "themeColor": "#1a110f",
+  "backgroundColor": "#1a110f",
+  "navigationColor": "#1a110f",
+  "navigationColorDark": "#0a0605",
+  "navigationDividerColor": "#2a1a15",
+  "startUrl": "/tango_cipher_bot_public/pwa/index.html?src=twa-apk",
+  "iconUrl": "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/icons/icon-512.png",
+  "maskableIconUrl": "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/icons/icon-maskable-512.png",
+  "display": "standalone",
+  "orientation": "portrait",
+  "minSdkVersion": 21,
+  "targetSdkVersion": 34,
+  "serviceAccountJsonFile": "",
+  "fingerprints": [],
+  "enableNotifications": false,
+  "enableGeolocation": false,
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuery": false,
+  "retainedBundles": [],
+  "versionCode": 1,
+  "versionName": "1.0.0",
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "__ALIAS__"
+  },
+  "splashScreenFadeOutDuration": 300
+}
+TWAEOF
+            PACKAGE_NAME="${PACKAGE_NAME:-com.tangocifrado.app}"
+            ALIAS="${ANDROID_KEY_ALIAS:-android}"
+            sed -i "s/__PACKAGE_ID__/$PACKAGE_NAME/" twa-manifest.json
+            sed -i "s/__ALIAS__/$ALIAS/"                 twa-manifest.json
+            echo "✅ twa-manifest.json generado en CI (package=$PACKAGE_NAME, alias=$ALIAS)"
+            cat twa-manifest.json | head -n 25
+          fi
         env:
           PACKAGE_NAME:      ${{ env.PACKAGE_NAME }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
