@@ -32,6 +32,10 @@ const BUNDLE_CACHE = `${CACHE_VERSION}-bundle`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const NETWORK_TIMEOUT_MS = 5000;
 
+// Set to false for production to reduce console noise for end users.
+// Set to true during development to debug cache lifecycle issues.
+const DEBUG_LOGS = false;
+
 const SHELL_FILES = [
   './',
   './index.html',
@@ -82,7 +86,9 @@ self.addEventListener('install', event => {
               fail.map(r => r.reason && r.reason.message)
             );
           }
-          console.log(`[SW install] precache ${ok}/${SHELL_FILES.length} shell files OK.`);
+          if (DEBUG_LOGS) {
+            console.log(`[SW install] precache ${ok}/${SHELL_FILES.length} shell files OK.`);
+          }
         })
       )
       .then(() => self.skipWaiting())
@@ -101,7 +107,9 @@ self.addEventListener('activate', event => {
         )
       )
       .then(deleted => {
-        console.log(`[SW activate] purged ${deleted.filter(Boolean).length} old caches.`);
+        if (DEBUG_LOGS) {
+          console.log(`[SW activate] purged ${deleted.filter(Boolean).length} old caches.`);
+        }
         return self.clients.claim();
       })
   );
