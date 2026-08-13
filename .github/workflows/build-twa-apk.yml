@@ -223,8 +223,10 @@ jobs:
             ln -s "$ANDROID_SDK_ROOT/cmdline-tools/latest" "$ANDROID_SDK_ROOT/tools"
           fi
           
-          # Answer "n" to "regenerate project?" prompt
-          printf 'n\n' | bubblewrap build --skipPwaValidation
+          # Answer "n" to "regenerate project?" prompt, then provide keystore passwords
+          {
+            printf 'n\n%s\n%s\n' "$ANDROID_KEYSTORE_PASSWORD" "${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
+          } | bubblewrap build --skipPwaValidation
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_PASSWORD:      ${{ secrets.ANDROID_KEY_PASSWORD }}
