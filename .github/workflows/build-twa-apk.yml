@@ -151,14 +151,19 @@ jobs:
         working-directory: ${{ env.APK_DIR }}
         run: |
           if [ -f twa-manifest.json ]; then
-            echo "✅ twa-manifest.json ya existe; salteando init."
-            exit 0
-          fi
-          echo "⚠️  No hay twa-manifest.json versionada — generando uno mínimo..."
-          # Generamos un twa-manifest.json mínimo a mano. bubblewrap init
-          # requiere interacción; para CI es más robusto generar el JSON
-          # con los campos obligatorios. Bubblewrap lo lee para build.
-          cat > twa-manifest.json <<'TWAEOF'
+            echo "✅ twa-manifest.json exists, but checking if Android project exists..."
+            if [ ! -f gradlew ]; then
+              echo "⚠️ gradlew missing - regenerating Android project from twa-manifest.json"
+              bubblewrap init --manifest ${{ env.MANIFEST_URL }}
+            else
+              echo "✅ Android project already exists"
+            fi
+          else
+            echo "⚠️  No hay twa-manifest.json versionada — generando uno mínimo..."
+            # Generamos un twa-manifest.json mínimo a mano. bubblewrap init
+            # requiere interacción; para CI es más robusto generar el JSON
+            # con los campos obligatorios. Bubblewrap lo lee para build.
+            cat > twa-manifest.json <<'TWAEOF'
           {
             "packageId": "__PACKAGE_ID__",
             "host": "misbusquedaspersonales-cyber.github.io",
@@ -222,6 +227,9 @@ jobs:
             echo "Creating tools symlink for bubblewrap compatibility..."
             ln -s "$ANDROID_SDK_ROOT/cmdline-tools/latest" "$ANDROID_SDK_ROOT/tools"
           fi
+          
+          # Ensure gradlew is executable (git checkout may strip execute bit)
+          chmod +x ./gradlew
           
           # Answer "n" to "regenerate project?" prompt
           # Keystore passwords are read from env vars BUBBLEWRAP_KEYSTORE_PASSWORD and BUBBLEWRAP_KEY_PASSWORD
