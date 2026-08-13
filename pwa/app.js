@@ -417,8 +417,18 @@ async function checkBundleFreshness() {
                 : localStorage.getItem(BUNDLE_GENERATED_AT_KEY);
         }
 
-        if (storedTs && serverTs > storedTs) {
-            // Newer bundle on server — wipe local corpus so init() re-prompts.
+        const serverHasNewer = (() => {
+            if (!storedTs) return true;
+            try {
+                const s = new Date(serverTs).getTime();
+                const t = new Date(storedTs).getTime();
+                return Number.isFinite(s) && Number.isFinite(t) && s > t;
+            } catch {
+                return serverTs > storedTs;
+            }
+        })();
+
+        if (serverHasNewer) {
             await deletePayloadDirect();
             await deleteSealedVault();
             localStorage.removeItem(BUNDLE_GENERATED_AT_KEY);
