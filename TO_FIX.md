@@ -6,9 +6,9 @@
 |---|---|---|---|
 | 🟢 P3 (Low) | 1 | 0 | 1 |
 | 🔵 P4 (Refactor) | 1 | 1 | 0 |
-| 🔧 Maintenance | 2 | 0 | 2 |
+| 🔧 Maintenance | 3 | 0 | 3 |
 | 🔧 Chunking edge cases | 2 | 0 | 2 |
-| **Total** | **6** | **0** | **6** |
+| **Total** | **7** | **0** | **7** |
 
 ---
 
@@ -35,6 +35,25 @@
 ---
 
 ## 🔧 Maintenance
+
+### [ ] M-3: CI APK build fails with exit 130 — bubblewrap postinstall JDK prompt blocks runner
+
+- **File**: `.github/workflows/build-twa-apk.yml` — "Install @bubblewrap/cli" step
+- **Problem**: The workflow installs `@bubblewrap/cli` via `npm install -g @bubblewrap/cli@<version>`. Bubblewrap's postinstall script checks for JDK in `PATH` and prompts the user to install it if not found. In GitHub Actions, this prompt blocks stdin (exit 130 / SIGINT), failing the build even though JDK 17 was already installed via `actions/setup-java@v4` in the previous step. The root cause: the postinstall script runs *before* the shell's `PATH` is updated with the JDK location, so the check returns false positive.
+- **Attempted fixes (all failed as of 2026-08-13)**:
+  1. ✅ Set `CI=true` — supposed to silence interactive prompts, but bubblewrap ignores it.
+  2. ✅ Set `BUBBLEWRAP_SKIP_JAVA_CHECK=1` — documented workaround from bubblewrap issues, but doesn't work in recent versions.
+  3. ✅ Pipe `printf 'n\nn\n'` to `npm install` — stdin is ignored when prompt fires.
+  4. ✅ Tried versions `1.21.0` and `1.25.0` — both still prompt.
+- **Current status**: Every CI build fails at this step. APK must be built locally and uploaded manually.
+- **Possible solutions**:
+  1. **Install with `--ignore-scripts`**: `npm install -g @bubblewrap/cli --ignore-scripts` skips the postinstall entirely. Risk: if the postinstall does necessary setup beyond the JDK check, this could break bubblewrap functionality.
+  2. **Pre-install JDK in a way bubblewrap detects**: add a step that explicitly adds JDK to `PATH` and verifies `java -version` before running `npm install`. The current `setup-java` action might not export `PATH` early enough.
+  3. **Fork bubblewrap**: patch out the interactive prompt and publish as `@tangocifrado/bubblewrap-cli`. Maintainable but adds dependency overhead.
+  4. **Build locally only**: accept that CI builds are blocked and document the manual build/upload process. Simplest short-term workaround.
+- **Logs**: All failed runs show `Process completed with exit code 130` at line ~24 (Install @bubblewrap/cli). Example run: 31669341683.
+- **Priority**: Medium — blocks automated APK releases but doesn't affect PWA (which is the primary distribution). Manual APK builds work fine locally.
+- **Recommendation**: Try solution #1 (`--ignore-scripts`) first. If that breaks, fall back to solution #4 (manual builds) and document the process in `PASOS_APK.md`.
 
 ### [ ] M-1: Keystore password reuses a known-compromised value
 
