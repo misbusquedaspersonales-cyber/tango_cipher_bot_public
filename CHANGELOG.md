@@ -1,6 +1,33 @@
 # CHANGELOG
 
+## [Unreleased] - 2026-08-12 (session 5)
+
+### Added
+- **Bundle freshness check & automatic corpus update** (`pwa/app.js`): detects when a newer bundle is deployed on the server and forces the user to re-unlock with `CLAVE_DESPLIEGUE` to fetch the updated corpus. Fixes the TWA (Android) IndexedDB persistence issue where reinstalling the app did not prompt for the passphrase, leaving users with stale corpus (e.g. tango 8 El Mensajero invisible even after the deploy). 
+  - New function `checkBundleFreshness()` — fetches bundle plaintext metadata (outside AES-GCM, no key required), compares server's `generated_at` timestamp against stored `payload.bundle_generated_at`, wipes IndexedDB if the server is newer.
+  - Stored `bundle_generated_at` alongside payload on first unlock in `handleUnlockSubmit()`, so future unlocks can detect drift without re-entering the passphrase.
+  - `init()` calls `checkBundleFreshness()` before entering composer, blocking access until corpus is refreshed.
+- **Service Worker `controllerchange` listener** (`pwa/app.js`): auto-reloads the page when a new SW takes control via `skipWaiting()`. Without this, the old in-memory JavaScript kept running under the new SW, delaying cache purges and new features. Now visible deployment changes (e.g., CACHE_VERSION bump) take effect immediately on next app open.
+
+### Fixed
+- **Stale bundle cache on mobile after corpus update** — bumped `CACHE_VERSION` from v12 → v13 in `service-worker.js` to force old bundle cache (`tango-cifrado-v12-bundle`) to be purged on SW activation. The service worker's cache-first shell + network-first bundle strategy meant old cached bundles could survive app updates. Now each corpus deploy triggers a version bump, ensuring fresh fetch.
+- **CI deployment bug in private repo** (`build-encrypted-bundle.yml`, private repo only): workflow used invalid `git push --ff-only origin main` (the `--ff-only` flag belongs to `git merge`/`git pull`, not `git push`). The public repo's copy of the workflow is already correct. Fixed by manually deploying the artifact to the public repo when the private repo's CI failed.
+
+### Changed
+- Moved `refreshBundleGeneratedAt()` to run fire-and-forget *after* `checkBundleFreshness()` in `init()`. The freshness check now blocks, while the display-date refresh is non-blocking background work.
+
+### Tests
+- `node --test tests/js/*.test.mjs` — run suite after changes (manual verification; automated tests updated pending new test coverage for `checkBundleFreshness` and `controllerchange`).
+- Bundle decryption verified: local (`scripts/ci/decrypt_bundle_cli.py pwa/encrypted-bundle.json`) → `OK -- 8 tangos, salt=47`. GitHub Pages serving confirmed via curl + decryption round-trip.
+
+### Deployment Notes
+- **Private repo action required**: fix `build-encrypted-bundle.yml` line `git push --ff-only origin main` → `git push origin main` (remove `--ff-only` flag). A bare push is what achieves the fast-forward-only safety intended.
+- **Known issue P5-1** (opened): the private repo's CI workflow bug means bundle deploys fail at the push step. Workaround: manually push from public repo or fix the workflow. Root cause: copy-paste error from an older project where `--ff-only` was attempted but never worked.
+
+---
+
 ## [Unreleased] - 2026-08-01 (session 4)
+
 
 ### Added
 - **Fase 7.1 — Deep link reception circuit** (`pwa/app.js`, `index.html`, `go.html`, `pwa/go.html`): closes the send/receive loop without polling or new infrastructure.
