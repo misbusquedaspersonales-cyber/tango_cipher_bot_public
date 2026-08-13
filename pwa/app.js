@@ -699,6 +699,13 @@ async function init() {
                 // Offline install just won't be available this session; the app
                 // still works online without it.
             });
+
+        // When a new SW takes control (skipWaiting fired), reload the page so
+        // the new shell + purged caches take effect immediately — without this,
+        // the old in-memory JS keeps running even though the new SW is active.
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+            window.location.reload();
+        });
     }
 }
 
