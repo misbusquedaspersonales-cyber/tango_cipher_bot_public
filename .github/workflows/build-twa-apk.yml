@@ -213,12 +213,7 @@ jobs:
           
           # Create bubblewrap config to bypass JDK and Android SDK prompts
           mkdir -p ~/.bubblewrap
-          cat > ~/.bubblewrap/config.json <<EOF
-{
-  "jdkPath": "$JAVA_HOME",
-  "androidSdkPath": "$ANDROID_SDK_ROOT"
-}
-EOF
+          echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_SDK_ROOT\"}" > ~/.bubblewrap/config.json
           
           bubblewrap build --skipPwaValidation
         env:
