@@ -215,7 +215,8 @@ jobs:
           mkdir -p ~/.bubblewrap
           cat > ~/.bubblewrap/config.json <<EOF
           {
-            "jdkPath": "$JAVA_HOME"
+            "jdkPath": "$JAVA_HOME",
+            "androidSdkPath": "$ANDROID_SDK_ROOT"
           }
           EOF
           
