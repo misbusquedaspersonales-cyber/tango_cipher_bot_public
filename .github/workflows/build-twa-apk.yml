@@ -211,14 +211,14 @@ jobs:
           export KEYSTORE_PASS="$ANDROID_KEYSTORE_PASSWORD"
           export KEYSTORE_KEY_PASS="${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
           
-          # Create bubblewrap config to bypass JDK prompts entirely
+          # Create bubblewrap config to bypass JDK and Android SDK prompts
           mkdir -p ~/.bubblewrap
           cat > ~/.bubblewrap/config.json <<EOF
-          {
-            "jdkPath": "$JAVA_HOME",
-            "androidSdkPath": "$ANDROID_SDK_ROOT"
-          }
-          EOF
+{
+  "jdkPath": "$JAVA_HOME",
+  "androidSdkPath": "$ANDROID_SDK_ROOT"
+}
+EOF
           
           bubblewrap build --skipPwaValidation
         env:
