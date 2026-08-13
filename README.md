@@ -181,3 +181,4 @@ Para que los pipelines funcionen correctamente, el repositorio público debe ten
 | `PRIVATE_REPO_PAT` | Obligatorio — **repo público** (`drift-check.yml`) | Personal Access Token con permisos de **lectura** sobre el repo privado (`tango_corpus_private`). Sin este secreto el workflow semanal no puede consultar el SHA remoto y falla. Se configura en el **repo público** (donde corre `drift-check.yml`), no en el privado. |
 
 > ⚠️ Importante: no embebas tokens en la URL remota de git (`https://<token>@github.com/...`). Esto puede exponer tu PAT en la configuración local. Usa una URL limpia y un helper de credenciales en su lugar. Ver `TROUBLESHOOTING.md` para más detalles sobre este problema.
+# CI test jue 13 ago 2026 06:50:28 GMT
