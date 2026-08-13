@@ -499,3 +499,150 @@ Actualizar en **tres lugares**:
 3. `misbusquedaspersonales-cyber.github.io/.well-known/assetlinks.json`
 
 `generate-assetlinks.sh` actualiza los dos primeros automáticamente. El tercero hay que copiarlo a mano al repo raíz y hacer push.
+
+---
+
+## Problema 15: `build-twa-apk` falla en `Install @bubblewrap/cli` con exit code 130
+
+### Síntoma
+
+El workflow de GitHub Actions muere en el step **Install @bubblewrap/cli** con:
+
+```
+? Do you want Bubblewrap to install the JDK (recommended)?
+  (Enter "No" to use your own JDK 17 installation) (Y/n)
+##[error]Process completed with exit code 130.
+```
+
+Todos los steps posteriores (Setup Android SDK, Restore keystore, bubblewrap build…) figuran como `skipped`.
+
+### Causa
+
+`@bubblewrap/cli@latest` incluye un script `postinstall` que lanza un prompt interactivo
+para instalar JDK. En CI, `stdin` está cerrado → el proceso recibe `SIGINT` → exit 130.
+El prompt se dispara incluso cuando JDK ya fue instalado por `setup-java` en el step anterior,
+porque el postinstall corre en un subshell separado donde `JAVA_HOME` aún no está en `PATH`.
+
+> **`CI=true` solo no alcanza** — `npm` lo propaga para suprimir barra de progreso, pero
+> bubblewrap no lo lee para saltar su postinstall personalizado.
+
+### Solución aplicada en este proyecto (2026-08-13)
+
+En `.github/workflows/build-twa-apk.yml` se hicieron tres cambios:
+
+1. **Pinear la versión** — cambiar `BUBBLEWRAP_VERSION: "latest"` por una versión estable
+   que no tenga el prompt en postinstall:
+   ```yaml
+   env:
+     BUBBLEWRAP_VERSION: "1.21.1"   # era "latest"
+   ```
+
+2. **Variables de entorno en el step de instalación**:
+   ```yaml
+   - name: Install @bubblewrap/cli
+     env:
+       CI: "true"
+       BUBBLEWRAP_SKIP_JAVA_CHECK: "1"   # <-- clave; saltea el postinstall JDK check
+     run: |
+       printf 'n\nn\n' | npm install -g @bubblewrap/cli@${{ env.BUBBLEWRAP_VERSION }}
+       bubblewrap --version
+   ```
+
+3. **Pipe de respuesta automática** (`printf 'n\nn\n' |`) como seguro adicional por si
+   otro prompt se cuela en builds futuros.
+
+### Si el problema vuelve con una versión nueva de bubblewrap
+
+1. Verificar en [npmjs.com/package/@bubblewrap/cli](https://www.npmjs.com/package/@bubblewrap/cli)
+   qué versión es `latest` actualmente.
+2. Buscar en el `CHANGELOG` de bubblewrap si introdujeron cambios en `postinstall`.
+3. Si el prompt cambió de texto o de variable de control, actualizar `BUBBLEWRAP_SKIP_JAVA_CHECK`
+   al nuevo nombre o agregar más respuestas al `printf`.
+4. Alternativamente, volver a pinear a `1.21.1` que es la última versión verificada como
+   funcional en CI sin prompts.
+
+---
+
+## Problema 16: Los secrets de GitHub Actions no se copian al migrar a un nuevo repositorio
+
+### Síntoma
+
+Después de crear un repositorio nuevo (o de clonar el código a una nueva cuenta/org),
+el workflow `build-twa-apk` falla en el step **Required secrets guard** con:
+
+```
+❌ Falta el secreto ANDROID_KEYSTORE_B64 (android.keystore en base64).
+```
+
+aunque vos sabés que ya configuraste esos secrets en el repositorio anterior.
+
+### Causa
+
+**GitHub Secrets no son parte del repositorio git.** No se clonan, no se transfieren y no
+aparecen en ningún backup del código. Son configuración de la plataforma GitHub, almacenada
+en la infraestructura de GitHub asociada a ese repositorio/org específico.
+
+Cada vez que se usa un repositorio nuevo, los secrets deben reconfigurarse. Intentar
+copiarlos tampoco es posible: GitHub los muestra como `••••••••` y no los permite exportar.
+
+### Solución — Configuración programática con `gh` CLI (sin navegador)
+
+Si tenés la keystore en `~/tango-signing/` y el `GITHUB_TOKEN` en `.env`, podés
+re-configurar todos los secrets en segundos desde la terminal, sin abrir el navegador:
+
+```bash
+# 1. Cargar el token desde .env
+GH_TOKEN=$(grep ^GITHUB_TOKEN .env | cut -d= -f2)
+
+# 2. Verificar que el token es válido y tiene acceso al repo
+curl -s -H "Authorization: Bearer $GH_TOKEN" \
+  https://api.github.com/repos/misbusquedaspersonales-cyber/tango_cipher_bot_public \
+  | grep '"name"'
+# → "name": "tango_cipher_bot_public"  ← OK
+
+# 3. Configurar la contraseña de la keystore
+GH_TOKEN="$GH_TOKEN" gh secret set ANDROID_KEYSTORE_PASSWORD \
+  -b "$(cat ~/tango-signing/keystore-password.txt)" \
+  -R misbusquedaspersonales-cyber/tango_cipher_bot_public
+
+# 4. Configurar el archivo keystore (codificado en base64, sin saltos de línea)
+base64 -w0 ~/tango-signing/android.keystore | \
+  GH_TOKEN="$GH_TOKEN" gh secret set ANDROID_KEYSTORE_B64 \
+  -R misbusquedaspersonales-cyber/tango_cipher_bot_public
+
+# 5. Verificar que quedaron registrados
+GH_TOKEN="$GH_TOKEN" gh secret list \
+  -R misbusquedaspersonales-cyber/tango_cipher_bot_public
+# → ANDROID_KEYSTORE_B64      Updated ...
+# → ANDROID_KEYSTORE_PASSWORD Updated ...
+
+# 6. Disparar el build
+GH_TOKEN="$GH_TOKEN" gh workflow run build-twa-apk.yml \
+  -R misbusquedaspersonales-cyber/tango_cipher_bot_public
+```
+
+> ℹ️ La keystore debe estar en `~/tango-signing/android.keystore` (fuera del workspace,
+> como documenta `PASOS_APK.md`). Si usaste `generate-keystore.sh` en otra máquina,
+> copiá el archivo por SCP o desde un backup cifrado antes de correr los comandos.
+
+### Por qué `gh auth status` puede fallar aunque los comandos funcionen
+
+`gh auth status` usa la sesión OAuth interactiva configurada con `gh auth login`.
+En entornos donde no se hizo ese login, el comando falla con `"Timeout trying to log in"`.
+
+Sin embargo, **`gh` acepta el token directamente vía la variable de entorno `GH_TOKEN`**,
+que es exactamente lo que hacen los comandos de arriba. Si `GH_TOKEN=<token> gh secret set`
+funciona, el token está bien aunque `gh auth status` diga error.
+
+### Otros secrets que pueden necesitar reconfigurarse
+
+| Secret | Repo donde va | Descripción |
+|---|---|---|
+| `ANDROID_KEYSTORE_B64` | **público** `tango_cipher_bot_public` | Keystore en base64 |
+| `ANDROID_KEYSTORE_PASSWORD` | **público** `tango_cipher_bot_public` | Contraseña de la keystore |
+| `ANDROID_KEY_ALIAS` | **público** (opcional) | Default: `android` |
+| `ANDROID_KEY_PASSWORD` | **público** (opcional) | Default: = KEYSTORE_PASSWORD |
+| `CLAVE_DESPLIEGUE` | **privado** `tango_corpus_private` | Passphrase AES del bundle |
+| `CIFRADO_SALT` | **privado** `tango_corpus_private` | SALT numérico del cifrado |
+| `PUBLIC_REPO_DEPLOY_TOKEN` | **privado** `tango_corpus_private` | PAT para push al repo público |
+| `PRIVATE_REPO_PAT` | **público** `tango_cipher_bot_public` | PAT de lectura al repo privado |

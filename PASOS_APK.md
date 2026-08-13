@@ -121,30 +121,73 @@ KEYSTORE_FILE=~/tango-signing/android.keystore \
 
 ---
 
-## CI automático (opcional — configurable en GitHub Actions)
+## CI automático — secrets y trigger via `gh` CLI (sin navegador)
 
-Para buildear el APK desde GitHub Actions sin tener la keystore en tu máquina:
+> ℹ️ **Los secrets NO se copian con el repo.** Cada vez que migrás a un repositorio nuevo,
+> hay que reconfigurarlos. Ver `TROUBLESHOOTING.md` Problema 16 para el contexto completo.
 
-1. Generar el base64 de la keystore:
-   ```bash
-   base64 -w0 tango-cifrado-apk/android.keystore
-   ```
+El workflow `build-twa-apk.yml` ya está configurado. Solo faltan los secrets y el trigger.
 
-2. En **Settings → Secrets and variables → Actions** del repo, agregar:
+### Paso A — Verificar que `gh` funciona con el token del `.env`
 
-   | Secreto | Valor |
-   |---|---|
-   | `ANDROID_KEYSTORE_B64` | el output del comando base64 arriba |
-   | `ANDROID_KEYSTORE_PASSWORD` | tu contraseña real (la que escribiste en generate-keystore.sh) |
+```bash
+GH_TOKEN=$(grep ^GITHUB_TOKEN .env | cut -d= -f2)
+curl -s -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/user | grep login
+# → "login": "misbusquedaspersonales-cyber"  ← token válido
+```
 
-3. Disparar build manual: Actions → build-twa-apk → **Run workflow**
+> **Nota:** `gh auth status` puede fallar con "Timeout" si no se hizo `gh auth login`
+> interactivo, pero eso no importa — `GH_TOKEN=<token> gh <cmd>` funciona igual.
 
-4. Para hacer un release con tag:
-   ```bash
-   git tag -a apk/v1.0.0 -m "APK TWA v1.0.0"
-   git push origin apk/v1.0.0
-   ```
-   El workflow sube el `.apk` + `.aab` como assets del release automáticamente.
+### Paso B — Configurar los secrets del APK (una sola vez por repo)
+
+```bash
+GH_TOKEN=$(grep ^GITHUB_TOKEN .env | cut -d= -f2)
+REPO="misbusquedaspersonales-cyber/tango_cipher_bot_public"
+
+# Contraseña de la keystore (leída del archivo en disco)
+GH_TOKEN="$GH_TOKEN" gh secret set ANDROID_KEYSTORE_PASSWORD \
+  -b "$(cat ~/tango-signing/keystore-password.txt)" -R "$REPO"
+
+# Keystore binaria, codificada en base64 sin saltos de línea (-w0)
+base64 -w0 ~/tango-signing/android.keystore | \
+  GH_TOKEN="$GH_TOKEN" gh secret set ANDROID_KEYSTORE_B64 -R "$REPO"
+
+# Verificar
+GH_TOKEN="$GH_TOKEN" gh secret list -R "$REPO"
+```
+
+Salida esperada:
+```
+ANDROID_KEYSTORE_B64      Updated ...
+ANDROID_KEYSTORE_PASSWORD Updated ...
+```
+
+### Paso C — Disparar el build
+
+**Opción 1 — Build manual (sin release):**
+```bash
+GH_TOKEN="$GH_TOKEN" gh workflow run build-twa-apk.yml -R "$REPO"
+```
+
+**Opción 2 — Build + release con tag:**
+```bash
+git tag -a apk/v1.0.0 -m "APK TWA v1.0.0"
+git push origin apk/v1.0.0
+# El workflow se dispara automáticamente y sube .apk + .aab al GitHub Release.
+```
+
+### Paso D — Verificar resultado
+
+```bash
+# Ver el run más reciente
+GH_TOKEN="$GH_TOKEN" gh run list --workflow=build-twa-apk.yml -L 1 -R "$REPO"
+
+# Si falló: ver en qué step
+GH_TOKEN="$GH_TOKEN" gh run view <run-id> -R "$REPO"
+```
+
+También disponible en la UI: `https://github.com/$REPO/actions`
 
 ---
 
@@ -165,5 +208,8 @@ Para buildear el APK desde GitHub Actions sin tener la keystore en tu máquina:
 |---|---|---|
 | Barra de Chrome visible al abrir el APK | assetlinks no validó | Verificar Paso 1. Confirmar que Pages sirve el JSON con `Content-Type: application/json`. |
 | `bubblewrap build` se cuelga sin output | Espera entrada de teclado | Ya está manejado con `CI=true` + `printf 'n\nn\n'` en `build-apk.sh`. |
+| `Install @bubblewrap/cli` falla con exit 130 | Prompt JDK interactivo en `npm install -g` — causado por `@bubblewrap/cli@latest` | El workflow ya tiene `BUBBLEWRAP_VERSION: "1.21.1"` y `BUBBLEWRAP_SKIP_JAVA_CHECK: "1"`. Ver `TROUBLESHOOTING.md` Problema 15. |
+| "Required secrets guard" falla (❌ Falta ANDROID_KEYSTORE_B64) | Los secrets no se copiaron al nuevo repo | Correr Paso B de esta sección. Ver `TROUBLESHOOTING.md` Problema 16. |
 | Gradle crash / out of memory | Poca RAM o JDK incorrecto | Instalar JDK 17 o 21; mínimo 8 GB RAM disponible. |
 | APK instala pero pide CLAVE_DESPLIEGUE cada vez | SW o IndexedDB no inicializado en primer arranque | Esperar 10s, cerrar y reabrir. Es normal solo la primera vez. |
+

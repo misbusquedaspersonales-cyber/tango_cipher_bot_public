@@ -1,5 +1,52 @@
 # CHANGELOG
 
+## [Unreleased] - 2026-08-13 (session 6)
+
+### Fixed
+
+- **CI build-twa-apk failing with exit code 130 on `Install @bubblewrap/cli` step** —
+  `npm install -g @bubblewrap/cli@latest` triggers a postinstall interactive JDK prompt
+  (`"Do you want Bubblewrap to install the JDK?"`) that kills the job immediately because
+  CI stdin is closed. Root cause: `BUBBLEWRAP_VERSION: "latest"` picked up a version whose
+  postinstall fires the prompt even when JDK is already installed (via `setup-java`).
+  Fixed in `.github/workflows/build-twa-apk.yml`:
+  1. Pinned `BUBBLEWRAP_VERSION` from `"latest"` → `"1.21.1"` (last known-stable version
+     without the postinstall prompt bug).
+  2. Added `CI: "true"` and `BUBBLEWRAP_SKIP_JAVA_CHECK: "1"` env vars to the install
+     step — suppresses the JDK check in bubblewrap's postinstall script.
+  3. Belt-and-suspenders: piped `printf 'n\nn\n'` into `npm install -g` so any remaining
+     prompt still receives an answer instead of blocking indefinitely.
+
+### Added / Documented
+
+- **Programmatic GitHub Actions secrets management via `gh` CLI** — when migrating to a
+  new repository (or after a repo wipe), GitHub Secrets are NOT carried over with git.
+  They must be re-created manually OR via the `gh secret set` command using the GitHub
+  token stored in `.env` (`GITHUB_TOKEN`). Full procedure documented in
+  `TROUBLESHOOTING.md` (Problema 15) and updated in `PASOS_APK.md` §CI automático.
+
+  Quick reference (one-shot, no browser needed):
+  ```bash
+  # Load token from .env
+  GH_TOKEN=$(grep ^GITHUB_TOKEN .env | cut -d= -f2)
+
+  # Set keystore password
+  GH_TOKEN="$GH_TOKEN" gh secret set ANDROID_KEYSTORE_PASSWORD \
+    -b "$(cat ~/tango-signing/keystore-password.txt)" \
+    -R misbusquedaspersonales-cyber/tango_cipher_bot_public
+
+  # Set keystore binary (base64-encoded, no line wraps)
+  base64 -w0 ~/tango-signing/android.keystore | \
+    GH_TOKEN="$GH_TOKEN" gh secret set ANDROID_KEYSTORE_B64 \
+    -R misbusquedaspersonales-cyber/tango_cipher_bot_public
+
+  # Trigger build immediately
+  GH_TOKEN="$GH_TOKEN" gh workflow run build-twa-apk.yml \
+    -R misbusquedaspersonales-cyber/tango_cipher_bot_public
+  ```
+
+---
+
 ## [Unreleased] - 2026-08-12 (session 5)
 
 ### Added
