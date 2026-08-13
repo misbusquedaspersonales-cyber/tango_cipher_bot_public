@@ -223,13 +223,14 @@ jobs:
             ln -s "$ANDROID_SDK_ROOT/cmdline-tools/latest" "$ANDROID_SDK_ROOT/tools"
           fi
           
-          # Answer "n" to "regenerate project?" prompt, then provide keystore passwords
-          {
-            printf 'n\n%s\n%s\n' "$ANDROID_KEYSTORE_PASSWORD" "${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
-          } | bubblewrap build --skipPwaValidation
+          # Answer "n" to "regenerate project?" prompt
+          # Keystore passwords are read from env vars BUBBLEWRAP_KEYSTORE_PASSWORD and BUBBLEWRAP_KEY_PASSWORD
+          printf 'n\n' | bubblewrap build --skipPwaValidation
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_PASSWORD:      ${{ secrets.ANDROID_KEY_PASSWORD }}
+          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          BUBBLEWRAP_KEY_PASSWORD:      ${{ secrets.ANDROID_KEY_PASSWORD != '' && secrets.ANDROID_KEY_PASSWORD || secrets.ANDROID_KEYSTORE_PASSWORD }}
         timeout-minutes: 45
 
       # ---------- Encontrar artefactos ----------
