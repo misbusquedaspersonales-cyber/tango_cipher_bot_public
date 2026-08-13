@@ -1,5 +1,7 @@
 # TROUBLESHOOTING
 
+> **Actualizado 2026-08-13**: problemas resueltos marcados como ✅ RESUELTO con referencias históricas. Para issues de prioridad media/baja y mejoras no bloqueantes, consultá [TO_FIX.md](TO_FIX.md).
+
 > Nota: si querés revisar los problemas pendientes y los items de mejora no bloqueantes, consultá [TO_FIX.md](TO_FIX.md). Allí se mantiene el seguimiento de los issues de prioridad media/baja que no afectan el uso normal de la app.
 
 ## Problema 1: No tengo el CHAT_ID de Telegram
@@ -179,23 +181,23 @@ El workflow de GitHub Actions diseñado para detectar si el repositorio privado 
 
 ---
 
-## Problema 12: ~~El workflow `drift-check.yml` no existe en el repo~~ ✅ Resuelto
+## ~~Problema 12: El workflow `drift-check.yml` no existe en el repo~~ ✅ RESUELTO
 
-`.github/workflows/drift-check.yml` existe y corre semanalmente (lunes 08:00 UTC). Si abrís un Issue etiquetado `drift` es que el workflow detectó que `PRIVATE_CORE_COMMIT` en `scripts/dev/setup_private_core.sh` quedó viejo respecto al HEAD del repo privado.
+**✅ RESUELTO** — `.github/workflows/drift-check.yml` existe y corre semanalmente (lunes 08:00 UTC).
 
-El workflow requiere el secreto `PRIVATE_REPO_PAT` en **este repo público** (Settings → Secrets and variables → Actions). Si el workflow falla con error de autenticación, ver **Problema 11** para crearlo. Si querés dispararlo manualmente sin esperar al lunes: Actions → "Drift check" → **Run workflow**.
-
----
-
-## Problema 13: La PWA no se instala en Android o funciona mal en móvil (deploy a GitHub Pages)
-
-Este problema agrupa todos los fallos móviles Android y de despliegue a Pages. La app está preparada para correr en celulares (tanto en instalación standalone como en navegador), pero hay 7 puntos típicos donde un deploy puede romperse en la práctica. Cada sub-sección abarca un síntoma + diagnóstico + arreglo.
-
-> 📌 Referencia rápida: para validar un deploy nuevo en móvil real, corré primero el checklist de `MOBILE_TESTING.md` §1–§7. Ese documento es release-specific y ya cubre los casos de regresión. Esta sección es para cuando algo falla *igual* y necesitás depurar.
+**Para referencia histórica**: Si se abre un Issue etiquetado `drift`, significa que el workflow detectó que `PRIVATE_CORE_COMMIT` en `scripts/dev/setup_private_core.sh` quedó viejo respecto al HEAD del repo privado. El workflow requiere el secreto `PRIVATE_REPO_PAT` configurado (ver Problema 11).
 
 ---
 
-### 12.1 Síntoma: Chrome Android no muestra "Instalar app" (solo "Agregar a página principal")
+## Problema 13: La PWA no se instala en Android o funciona mal en móvil
+
+Este problema agrupa todos los fallos móviles Android y de despliegue a Pages. La app está preparada para correr en celulares (tanto en instalación standalone como en navegador), pero hay 7 puntos típicos donde un deploy puede romperse en la práctica.
+
+> 📌 **Para validación**: usar el checklist completo de `MOBILE_TESTING.md` §1–§7 antes de aprobar cualquier deploy.
+
+---
+
+### 13.1 Síntoma: Chrome Android no muestra "Instalar app" (solo "Agregar a página principal")
 
 Chrome solo ofrece **Instalar app** (PWA de verdad, standalone, sin barra de navegación) cuando se cumplen **todos** los requisitos siguientes. Falla uno → no hay banner, solo un shortcut de bookmark.
 
@@ -220,7 +222,7 @@ touch .nojekyll pwa/.nojekyll && git add .nojekyll pwa/.nojekyll && git commit &
 
 ---
 
-### 12.2 Síntoma: Las URLs cortas dan 404 (`/` raíz o `/go.html`)
+### 13.2 Síntoma: Las URLs cortas dan 404 (`/` raíz o `/go.html`)
 
 Estos redirects existen para no tener que escribir la ruta larga en el teclado del móvil (errores de tipeo muy frecuentes). Si dan 404 es **siempre** uno de estos dos casos:
 
@@ -241,7 +243,7 @@ Repo público → Settings → Pages → "Your site is live at https://…"
 
 ---
 
-### 12.3 Síntoma: "Instalé la app pero sigue apareciendo la barra de URL de Chrome"
+### 13.3 Síntoma: "Instalé la app pero sigue apareciendo la barra de URL de Chrome"
 
 Significa que no está en modo `standalone`, sino que es un shortcut de browser. Diagnóstico:
 
@@ -254,28 +256,15 @@ Si aún así sigue con barra URL → revisá `apple-mobile-web-app-capable` meta
 
 ---
 
-### 12.4 Síntoma: Modo Avión no funciona o muestra error críptico "HTTP 0"
+### ~~13.4 Síntoma: Modo Avión no funciona o muestra error críptico "HTTP 0"~~ ✅ RESUELTO
 
-Hay **dos escenarios** deliberadamente distintos. El parche de caché v5→v10 arregló el error "HTTP 0 sin contexto". Si volvés a verlo, es que tu teléfono aún tiene un Service Worker **viejo** (versión pre-v10).
+**✅ RESUELTO** — El parche de caché v5→v13 + `checkBundleFreshness()` + Service Worker `controllerchange` auto-reload eliminó el error "HTTP 0 sin contexto".
 
-**Escenario esperado A — Bundle ya cacheado (uso diario offline):**
-App que ya abriste y desbloqueaste una vez → en Modo Avión abre instantáneo, compositor funciona sin conexión. Si no pasa:
-- DevTools → Application → Service Workers → Bypass for network OFF (sino sw está desactivado)
-- DevTools → Application → Cache Storage → debe existir `tango-cifrado-v10-shell` y `tango-cifrado-v10-bundle`. Si los nombres dicen `v5` o no hay bundle cacheado → te falta 1 vez haber abierto con internet.
-
-**Escenario esperado B — Sin bundle + Sin red (verdadero primer run en avión):**
-Aparece mensaje en **español claro**, no un HTTP 0 críptico:
-> *"Sin conexión y no hay una copia guardada del paquete cifrado. Conectate a internet y probá de nuevo."*
-
-Si en vez de eso ves `No se pudo descargar ./encrypted-bundle.json (HTTP 0)` → **SW viejo**. Procedimiento para forzar update en Android:
-```
-Chrome ⋮ → ⓘ (info del sitio) → Permisos y almacenamiento → Administrar espacio → Borrar almacenamiento.
-```
-Cerrá y volvé a abrir. El SW recién instalado es el v8. Si es una instalación standalone (no Chrome tab), tenés que **desinstalar y reinstalar** la app (settings Android → Apps → Tango → Desinstalar) porque las actualizaciones de SW en modo standalone a veces tardan 24h por política de Chrome.
+**Para referencia histórica**: había dos escenarios distintos según si el bundle estaba cacheado. El Service Worker v13+ maneja ambos casos correctamente con mensajes claros en español.
 
 ---
 
-### 12.5 Síntoma: Teclado QWERTY para el PIN (en vez de numérico) / notch corta contenido
+### 13.4 Síntoma: Teclado QWERTY para el PIN (en vez de numérico) / notch corta contenido
 
 **PIN con teclado equivocado (QWERTY):** Faltan los `inputmode="numeric"` en los campos PIN. Verificá `index.html` → el `<input id="new-pin">`, `<input id="confirm-pin">`, y `<input id="device-pin">` tienen que tener **tres** de ellos con `inputmode="numeric"`. Si no → Android no sabe que es campo numérico y abre QWERTY.
 
@@ -286,22 +275,15 @@ Cerrá y volvé a abrir. El SW recién instalado es el v8. Si es una instalació
 
 ---
 
-### 12.6 Síntoma: Actualicé el corpus pero la app móvil sigue mostrando tangos viejos (no llega el bundle nuevo)
+### ~~13.5 Síntoma: Actualicé el corpus pero la app móvil sigue mostrando tangos viejos~~ ✅ RESUELTO
 
-Por diseño el bundle usa **network-first** para no depender del HTTP cache de Pages (10 min default). Pero:
-1. **Asegurate de cerrar y reabrir** la app (no solo cambiar de app). `registration.update()` corre en cada carga, pero si la app quedó en background por mucho tiempo no dispara.
-2. Si es instalada standalone, a veces Chrome retrasa la comprobación de update de SW a 24h → podés forzar desinstalando / reinstalando.
-3. **Confirmá que el bundle remoto efectivamente cambió**:
-   ```
-   curl -s -D- -H 'Cache-Control: no-cache' \
-     https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/encrypted-bundle.json \
-     | grep -i generated_at
-   ```
-   Si devuelve la fecha vieja (2026-07-29 en vez de la nueva) → el workflow `build-encrypted-bundle.yml` del repo privado **no corrió exitosamente** o el paso `deploy-to-public-repo` quedó en `📭 skipped (bundle already matches)` porque la comparación de SHA dijo igual. Volvé a correr el workflow dispatch en el privado y mirá el Step "bundle-diff": `OLD_SHA` vs `NEW_SHA` deben diferir para que haga push.
+**✅ RESUELTO** — `checkBundleFreshness()` implementado en `pwa/app.js` detecta automáticamente cuando hay un bundle nuevo en el servidor y fuerza al usuario a re-desbloquear para obtener el corpus actualizado.
+
+**Para referencia histórica**: el problema era que el Service Worker usaba cache-first para el bundle, y la app móvil no detectaba cambios automáticamente.
 
 ---
 
-### 12.7 Checklist ultra rápido: 6 comandos + 3 clicks para aprobar un deploy móvil
+### 13.6 Checklist ultra rápido: 6 comandos + 3 clicks para aprobar un deploy móvil
 
 Previo a dar un deploy por bueno en un celular real, ejecutá **en la raíz de la copia local del repo público**:
 
@@ -446,127 +428,35 @@ curl -s -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
 
 ---
 
-## Problema 15: El archivo `keystore-password.txt` aparece en exports del workspace (Tango_compact.txt o similar)
+## Problema 15: El archivo `keystore-password.txt` aparece en exports del workspace
 
-### Qué pasó
+### Qué pasó ✅ RESUELTO
 
-Existía una herramienta (o proceso de agente) que generaba un dump compacto del workspace — `Tango_compact.txt` u otro archivo similar. Esta herramienta leía el filesystem directamente y **no respetaba `.gitignore`**. Dos keystores quedaron expuestas:
-- Keystore sandbox (contraseña `TangoCifrado-Sandbox-2026!`) — expuesta en el primer export.
-- Segunda keystore (contraseña `SeVestiraDeFiesta`) — expuesta en el segundo export.
+**✅ RESUELTO** — La keystore activa está ahora en `~/tango-signing/`, fuera del workspace. Las herramientas de export solo escanean el workspace.
 
-### Solución aplicada ✅
-
-**Opción B implementada:** la keystore activa está en `~/tango-signing/`, fuera del workspace. `build-apk.sh` y `generate-assetlinks.sh` detectan esa ruta automáticamente. La herramienta de export solo escanea el workspace — no alcanza `~/tango-signing/`.
-
-`assetlinks.json` fue regenerado con el fingerprint de la nueva keystore (`90:17:F1:AA:...`) y está publicado en:
-- `misbusquedaspersonales-cyber.github.io/.well-known/assetlinks.json` (root domain, requerido por DAL)
-- `tango_cipher_bot_public/pwa/.well-known/assetlinks.json` (espejo)
-
-`generate-keystore.sh` rechaza las dos contraseñas comprometidas conocidas si se pasan vía `KEYSTORE_PASS`.
+**Para referencia histórica**: existían herramientas que generaban dumps del workspace sin respetar `.gitignore`, exponiendo contraseñas de keystores anteriores.
 
 ---
 
 ## Problema 16: DAL tool devuelve `ERROR_CODE_FETCH_ERROR` para `misbusquedaspersonales-cyber.github.io`
 
-### Qué pasó
+### Qué pasó ✅ RESUELTO
 
-La herramienta de Google Digital Asset Links busca el archivo en:
-```
-https://<host>/.well-known/assetlinks.json
-```
-donde `<host>` es el valor del campo `host` en `twa-manifest.json` — en este caso `misbusquedaspersonales-cyber.github.io`.
+**✅ RESUELTO** — Se creó el repo `misbusquedaspersonales-cyber.github.io` como GitHub Pages raíz del usuario, conteniendo el `assetlinks.json` en la ubicación correcta.
 
-Como esta es una GitHub Pages de **proyecto** (repo `tango_cipher_bot_public`), el root domain `https://misbusquedaspersonales-cyber.github.io/` devolvía 404. El archivo estaba publicado bajo `/tango_cipher_bot_public/.well-known/assetlinks.json`, que Android puede usar en algunos contextos, pero el DAL tool y la verificación TWA primaria usan el root.
-
-### Solución aplicada ✅
-
-Se creó el repo `misbusquedaspersonales-cyber.github.io` — un repo con ese nombre exacto se convierte automáticamente en la GitHub Pages raíz del usuario/org. Contiene únicamente:
-- `.well-known/assetlinks.json` — el fingerprint `90:17:F1:AA:...`
-- `.nojekyll` — para que Jekyll no procese los dotfiles
-- `index.html` — redirect a la PWA real
-
-Verificación:
-```bash
-curl -sI "https://misbusquedaspersonales-cyber.github.io/.well-known/assetlinks.json"
-# → HTTP/2 200, content-type: application/json
-```
-
-### Si hay que actualizar el fingerprint en el futuro
-
-Actualizar en **tres lugares**:
-1. `tango_cipher_bot_public/.well-known/assetlinks.json`
-2. `tango_cipher_bot_public/pwa/.well-known/assetlinks.json`
-3. `misbusquedaspersonales-cyber.github.io/.well-known/assetlinks.json`
-
-`generate-assetlinks.sh` actualiza los dos primeros automáticamente. El tercero hay que copiarlo a mano al repo raíz y hacer push.
+**Para referencia histórica**: Digital Asset Links requiere el archivo en el root domain, pero GitHub Pages de proyecto lo servía en una subcarpeta.
 
 ---
 
-## Problema 15: `build-twa-apk` falla en `Install @bubblewrap/cli` con exit code 130
+## ~~Problema 17: `build-twa-apk` falla en `Install @bubblewrap/cli` con exit code 130~~ ✅ RESUELTO
 
-### Síntoma
+**✅ RESUELTO** — El flag `--ignore-scripts` en `npm install -g` elimina el prompt interactivo de JDK que causaba el exit code 130 en CI.
 
-El workflow de GitHub Actions muere en el step **Install @bubblewrap/cli** con:
-
-```
-? Do you want Bubblewrap to install the JDK (recommended)?
-  (Enter "No" to use your own JDK 17 installation) (Y/n)
-##[error]Process completed with exit code 130.
-```
-
-Todos los steps posteriores (Setup Android SDK, Restore keystore, bubblewrap build…) figuran como `skipped`.
-
-### Causa
-
-`@bubblewrap/cli@latest` incluye un script `postinstall` que lanza un prompt interactivo
-para instalar JDK. En CI, `stdin` está cerrado → el proceso recibe `SIGINT` → exit 130.
-El prompt se dispara incluso cuando JDK ya fue instalado por `setup-java` en el step anterior,
-porque el postinstall corre en un subshell separado donde `JAVA_HOME` aún no está en `PATH`.
-
-> **`CI=true` solo no alcanza** — `npm` lo propaga para suprimir barra de progreso, pero
-> bubblewrap no lo lee para saltar su postinstall personalizado.
-
-### Intentos fallidos (documentados para no repetirlos)
-
-| Intento | Resultado |
-|---|---|
-| `CI=true` en env del step | ❌ El prompt igual se dispara |
-| `BUBBLEWRAP_SKIP_JAVA_CHECK=1` en env | ❌ El prompt igual se dispara (confirmado en run 31669047391) |
-| `printf 'n\nn\n' \| npm install` | ❌ npm no pasa el stdin al subproceso postinstall |
-| Pinear a `1.21.1` | ❌ No cambia nada, el prompt existe en esa versión también |
-
-### Solución aplicada en este proyecto (2026-08-13, run 31669047391+)
-
-Usar `--ignore-scripts` en `npm install -g` para que npm **no ejecute ningún lifecycle script**
-(ni `postinstall`, ni `preinstall`, ni `install`). El JDK prompt vive en `postinstall`;
-aletarlo elimina el prompt completamente.
-
-Bubblewrap encuentra JDK en tiempo de ejecución a través de `JAVA_HOME` (exportado por
-`actions/setup-java@v4`), no a través del postinstall — así que saltear postinstall
-**no rompe** ninguna funcionalidad de bubblewrap.
-
-```yaml
-- name: Install @bubblewrap/cli
-  run: |
-    npm install -g @bubblewrap/cli@${{ env.BUBBLEWRAP_VERSION }} --ignore-scripts
-    bubblewrap --version
-```
-
-### Si el problema vuelve en el futuro
-
-1. Verificar que `--ignore-scripts` sigue en el step. Si alguien lo quitó, restaurarlo.
-2. Si `bubblewrap --version` falla después de `--ignore-scripts`, significa que el postinstall
-   hace algo necesario para inicializar el binario. En ese caso, crear un step adicional:
-   ```bash
-   # Alternativa si --ignore-scripts rompe bubblewrap:
-   JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) \
-     npm install -g @bubblewrap/cli@${{ env.BUBBLEWRAP_VERSION }}
-   ```
-   Esto fuerza `java` en PATH antes de que el postinstall corra, evitando el false positive.
+**Para referencia histórica**: `@bubblewrap/cli` incluía un script `postinstall` interactivo que preguntaba sobre instalar JDK, incompatible con CI donde stdin está cerrado.
 
 ---
 
-## Problema 16: Los secrets de GitHub Actions no se copian al migrar a un nuevo repositorio
+## Problema 18: Los secrets de GitHub Actions no se copian al migrar a un nuevo repositorio
 
 ### Síntoma
 
@@ -649,3 +539,100 @@ funciona, el token está bien aunque `gh auth status` diga error.
 | `CIFRADO_SALT` | **privado** `tango_corpus_private` | SALT numérico del cifrado |
 | `PUBLIC_REPO_DEPLOY_TOKEN` | **privado** `tango_corpus_private` | PAT para push al repo público |
 | `PRIVATE_REPO_PAT` | **público** `tango_cipher_bot_public` | PAT de lectura al repo privado |
+
+---
+
+## Problema 19: Cambios estructurales en la interfaz no se reflejan en la app móvil instalada
+
+### Síntoma
+
+Después de actualizar el código con cambios en la estructura de la interfaz de usuario (nuevos elementos, reorganización de pantallas, cambios en el flujo de navegación), la app móvil instalada sigue mostrando la versión anterior y no refleja las modificaciones.
+
+### Causa
+
+Cuando se instala una PWA como aplicación standalone en Android, el navegador Chrome cachea agresivamente los recursos de la interfaz. Para cambios **estructurales** importantes (no solo contenido del bundle cifrado), puede ser necesario limpiar completamente el almacenamiento de la aplicación.
+
+### Cuándo aplicar esta solución
+
+**Aplica cuando:**
+- Agregaste nuevas pantallas o secciones a la app
+- Cambiaste el flujo de navegación o la estructura de menús
+- Modificaste elementos de la interfaz (botones, formularios, layout)
+- Actualizaste CSS que afecta la estructura visual
+- La app sigue mostrando elementos viejos a pesar de haber actualizado el Service Worker
+
+**No es necesario para:**
+- Cambios solo en el contenido de tangos (el bundle cifrado se actualiza automáticamente)
+- Correcciones menores de texto o colores
+- Actualizaciones del manifest.json o íconos (estas se actualizan automáticamente)
+
+### Solución paso a paso
+
+#### Opción A - Limpiar almacenamiento desde la configuración de Chrome
+
+1. **Abrir la información del sitio:**
+   - Chrome ⋮ (menú) → ⓘ Información del sitio
+
+2. **Acceder al almacenamiento:**
+   - Permisos y almacenamiento → "Administrar espacio" o "Storage settings"
+
+3. **Borrar todo el almacenamiento:**
+   - "Borrar almacenamiento" → "Borrar"
+   - Confirmar la acción
+
+4. **Cerrar y reabrir la app:**
+   - Cerrar completamente Chrome o la app standalone
+   - Volver a abrir desde el ícono del escritorio
+
+#### Opción B - Limpiar desde configuración de Android (para app instalada)
+
+1. **Ir a configuración de aplicaciones:**
+   - Android Settings → Apps → buscar "Tango" o el nombre de tu app
+
+2. **Limpiar datos de la aplicación:**
+   - Storage & cache → "Clear storage" o "Borrar almacenamiento"
+   - También: "Clear cache" → "Borrar caché"
+
+3. **Reiniciar la aplicación:**
+   - Abrir la app desde el ícono del escritorio
+   - La app solicitará nuevamente la `CLAVE_DESPLIEGUE`
+
+#### Opción C - Desinstalar y reinstalar (última opción)
+
+Si las opciones anteriores no funcionan:
+
+1. **Desinstalar la PWA:**
+   - Mantener presionado el ícono de la app → "Desinstalar" o "Remove"
+
+2. **Limpiar datos del navegador (opcional):**
+   - Chrome → Settings → Privacy and security → Clear browsing data
+   - Seleccionar "Cached images and files" y "Site settings"
+
+3. **Reinstalar desde el navegador:**
+   - Abrir `https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/`
+   - Chrome ⋮ → "Instalar app"
+
+### Verificación
+
+Después de limpiar el almacenamiento:
+
+1. **La app debe solicitar la `CLAVE_DESPLIEGUE` nuevamente** (esto confirma que se borró el almacenamiento local)
+
+2. **Los cambios estructurales deben ser visibles** después del primer desbloqueo
+
+3. **El Service Worker se descarga nuevamente** (puedes verificar en Chrome DevTools → Application → Service Workers)
+
+### Cuándo contactar soporte técnico
+
+Si después de seguir todos los pasos la app sigue mostrando la interfaz anterior:
+
+1. **Verifica que el deploy fue exitoso:**
+   ```bash
+   curl -I https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html
+   ```
+
+2. **Confirma la fecha del último deploy en GitHub:**
+   - Ve a Settings → Pages en el repositorio público
+   - Verifica que dice "published" con fecha reciente
+
+3. **Prueba desde un dispositivo diferente** para descartar problemas específicos del teléfono
