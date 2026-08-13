@@ -11,5 +11,11 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from tango_cifrado.telegram import enviar_mensaje, TELEGRAM_MAX_LEN  # noqa: F401, E402
+from tango_cifrado.telegram import (  # noqa: F401, E402
+    enviar_mensaje,
+    TelegramError,
+    TelegramApiError, 
+    TelegramNetworkError,
+    TELEGRAM_MAX_LEN,
+)
 import requests  # noqa: F401 — kept here so patch("telegram_client.requests.post") still works in tests

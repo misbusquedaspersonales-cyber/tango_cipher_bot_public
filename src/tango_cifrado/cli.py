@@ -9,7 +9,7 @@ import os
 from dotenv import load_dotenv
 
 from tango_cifrado.corpus import cargar_tangos, cifrar_mensaje, descifrar_mensaje
-from tango_cifrado.telegram import enviar_mensaje
+from tango_cifrado.telegram import enviar_mensaje, TelegramError
 
 load_dotenv()
 
@@ -37,10 +37,12 @@ def main():
     print(f"\nCódigo Cifrado Generado: {codigo_cifrado}")
 
     try:
-        exito = enviar_mensaje(BOT_TOKEN, CHAT_ID, codigo_cifrado)
-        print("Mensaje enviado con éxito a Telegram." if exito else "Error al enviar mensaje a Telegram.")
+        enviar_mensaje(BOT_TOKEN, CHAT_ID, codigo_cifrado)
+        print("Mensaje enviado con éxito a Telegram.")
     except ValueError as e:
         print(f"Error de configuración: {e}")
+    except TelegramError as e:
+        print(f"Error al enviar mensaje a Telegram: {e}")
 
     try:
         print("\nPrueba de descifrado en recepción:")
