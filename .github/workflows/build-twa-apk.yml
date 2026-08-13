@@ -210,12 +210,11 @@ jobs:
           export CI="${CI:-true}"
           export KEYSTORE_PASS="$ANDROID_KEYSTORE_PASSWORD"
           export KEYSTORE_KEY_PASS="${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
-          # Auto-respond "n" (No) al prompt interactivo inicial de Bubblewrap:
-          # "Do you want Bubblewrap to install the JDK (recommended)? (Y/n)"
-          # En CI ya instalamos JDK via setup-java, así que contestar No evita que
-          # el job se cuelgue esperando stdin. CI=true evita prompts futuros también.
+          # Auto-respond to Bubblewrap's JDK prompts:
+          # 1. "Do you want Bubblewrap to install the JDK? (Y/n)" → n
+          # 2. "Path to your existing JDK 17:" → $JAVA_HOME
           {
-            printf 'n\nn\n'
+            printf 'n\n%s\n\n' "$JAVA_HOME"
           } | bubblewrap build \
             --skipPwaValidation  # si el Pages es privado/temporal, esto evita que falle; quitar en producción
         env:
