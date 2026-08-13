@@ -127,6 +127,72 @@ function isShellRequest(url) {
   return false;
 }
 
+async function handleShareTarget(request) {
+  try {
+    const formData = await request.formData();
+    const sharedFile = formData.get('shared_file');
+    
+    if (sharedFile && sharedFile instanceof File) {
+      // Store the file content temporarily in IndexedDB so the app can access it
+      // We'll use a simple key-value approach with a timestamp-based cleanup
+      const fileContent = await sharedFile.text();
+      const timestamp = Date.now();
+      
+      // Open IndexedDB to store the shared file temporarily
+      const dbRequest = indexedDB.open('TangoCifradoSharedFiles', 1);
+      
+      return new Promise((resolve) => {
+        dbRequest.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('files')) {
+            db.createObjectStore('files', { keyPath: 'id' });
+          }
+        };
+        
+        dbRequest.onsuccess = (e) => {
+          const db = e.target.result;
+          const tx = db.transaction(['files'], 'readwrite');
+          const store = tx.objectStore('files');
+          
+          // Store file with timestamp-based ID
+          store.put({
+            id: 'latest',
+            content: fileContent,
+            filename: sharedFile.name,
+            timestamp: timestamp
+          });
+          
+          tx.oncomplete = () => {
+            db.close();
+            // Redirect to the app with a flag indicating a shared file is available
+            const redirectUrl = new URL(request.url);
+            redirectUrl.searchParams.set('shared_file_ready', '1');
+            resolve(Response.redirect(redirectUrl.toString(), 302));
+          };
+          
+          tx.onerror = () => {
+            db.close();
+            // Fallback: redirect to app without shared file
+            resolve(Response.redirect(new URL('./', self.location).toString(), 302));
+          };
+        };
+        
+        dbRequest.onerror = () => {
+          // Fallback: redirect to app without shared file  
+          resolve(Response.redirect(new URL('./', self.location).toString(), 302));
+        };
+      });
+    }
+    
+    // No file or invalid file: redirect to main app
+    return Response.redirect(new URL('./', self.location).toString(), 302);
+  } catch (err) {
+    console.warn('[SW] Share target error:', err);
+    // Fallback: redirect to main app
+    return Response.redirect(new URL('./', self.location).toString(), 302);
+  }
+}
+
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
@@ -134,6 +200,12 @@ self.addEventListener('fetch', event => {
   // the network live, and failures there are handled by app.js/telegram
   // client logic, not the service worker.
   if (url.hostname === 'api.telegram.org') return;
+
+  // Handle Web Share Target POST requests
+  if (event.request.method === 'POST' && url.searchParams.get('src') === 'shared-file') {
+    event.respondWith(handleShareTarget(event.request));
+    return;
+  }
 
   if (event.request.method !== 'GET') return;
 

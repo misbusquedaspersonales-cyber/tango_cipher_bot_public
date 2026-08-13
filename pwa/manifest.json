@@ -30,5 +30,18 @@
       "type": "image/png",
       "purpose": "maskable"
     }
-  ]
+  ],
+  "share_target": {
+    "action": "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html?src=shared-file",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "shared_file",
+          "accept": ["text/plain", ".txt"]
+        }
+      ]
+    }
+  }
 }

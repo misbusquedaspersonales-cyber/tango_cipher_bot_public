@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## [Unreleased] - 2026-08-13 (session 6 round 5 — PWA Share Target implementation)
+
+### Added
+- **Web Share Target support** — completed the missing piece for seamless document sharing reception (Fase 10.1.1 final step):
+  - `pwa/manifest.json` now includes `share_target` configuration for `.txt` files, allowing the PWA to appear in Android's "Share" menu when sharing text files from Telegram.
+  - Service Worker (`pwa/service-worker.js`) handles POST requests from Web Share Target, temporarily storing shared file content in IndexedDB and redirecting to the app.
+  - `app.js` enhanced with `getSharedFileIfAvailable()` to read shared files from IndexedDB on app launch, providing the "one-tap" UX flow intended by the document transport strategy.
+  - URL cleanup: `?shared_file_ready=1` parameter automatically removed from address bar after processing.
+
+### Fixed
+- **Document sharing UX gap closed** — recipients can now share `.txt` files directly from Telegram to the app without manual file opening. Previously, the sender could attach documents via `sendDocument`, but receivers had to manually open the app and use the `<input type="file">` fallback.
+
+### Technical Details
+- **Share Target flow**: Telegram share → Service Worker intercepts POST → IndexedDB temporary storage → redirect with flag → app reads and cleans up → automatic deep link processing
+- **Backward compatibility**: Manual file input (`<input type="file">`) remains as fallback for browsers/contexts where share_target isn't available
+- **Security**: Shared files are stored temporarily in IndexedDB with automatic cleanup after reading, preventing accumulation of sensitive data
+
+### Tests
+- **57/57 JavaScript tests passing** — all existing transport, cipher, and E2E tests continue to pass
+- **14/14 Python tests passing** — encrypted bundle and Telegram client tests remain stable
+
+---
+
 ## [Unreleased] - 2026-08-13 (session 6 round 4 — APK build code cleanup)
 
 ### Fixed

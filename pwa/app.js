@@ -687,10 +687,77 @@ function enterComposer(autoRunDeepLink = false) {
   applyDeepLinkIfPending(autoRunDeepLink);
 }
 
+async function getSharedFileIfAvailable() {
+  // Check if we have a shared file from Web Share Target
+  const urlParams = new URLSearchParams(location.search);
+  if (!urlParams.get('shared_file_ready')) return null;
+  
+  try {
+    // Open the same IndexedDB the service worker uses
+    const dbRequest = indexedDB.open('TangoCifradoSharedFiles', 1);
+    
+    return new Promise((resolve) => {
+      dbRequest.onsuccess = (e) => {
+        const db = e.target.result;
+        const tx = db.transaction(['files'], 'readonly');
+        const store = tx.objectStore('files');
+        const getRequest = store.get('latest');
+        
+        getRequest.onsuccess = () => {
+          const result = getRequest.result;
+          if (result && result.content) {
+            // Clean up the stored file after reading
+            const deleteTx = db.transaction(['files'], 'readwrite');
+            const deleteStore = deleteTx.objectStore('files');
+            deleteStore.delete('latest');
+            deleteTx.oncomplete = () => db.close();
+            
+            // Create a mock File object with the content
+            resolve({
+              text: async () => result.content,
+              name: result.filename || 'shared.txt'
+            });
+          } else {
+            db.close();
+            resolve(null);
+          }
+        };
+        
+        getRequest.onerror = () => {
+          db.close();
+          resolve(null);
+        };
+      };
+      
+      dbRequest.onerror = () => {
+        resolve(null);
+      };
+    });
+  } catch (err) {
+    console.warn('Error reading shared file:', err);
+    return null;
+  }
+}
+
 async function init() {
+  // Handle Web Share Target if this page was opened via sharing a file.
+  // When someone shares a .txt file with this app, the service worker
+  // stores it in IndexedDB and redirects here with ?shared_file_ready=1
+  let sharedFile = null;
+  if (location.search.includes('shared_file_ready=1')) {
+    sharedFile = await getSharedFileIfAvailable();
+    if (sharedFile) {
+      console.log('📎 Received shared file:', sharedFile.name);
+      // Clean up the URL by removing the shared_file_ready parameter
+      const newUrl = new URL(location);
+      newUrl.searchParams.delete('shared_file_ready');
+      history.replaceState(null, '', newUrl.toString());
+    }
+  }
+
   // Read and clear any incoming ciphertext (from ?c= query param or shared
   // file) before any async work, so the URL is clean before vault unlock.
-  pendingDeepLink = await resolveIncoming({ loc: location, hist: history });
+  pendingDeepLink = await resolveIncoming({ loc: location, hist: history, sharedFile });
   $('#unlock-form').addEventListener('submit', handleUnlockSubmit);
   $('#pin-unlock-form').addEventListener('submit', handlePinUnlockSubmit);
   $('#mode-cifrar').addEventListener('click', () => setMode('cifrar'));

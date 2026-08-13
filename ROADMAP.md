@@ -19,8 +19,10 @@ TWA verification confirmed on device — "running in Chrome" toast no longer app
 ### 5. P4-2 — Split de `app.js` en `core/` y `ui/`
 **Folded into Fase 10.1.1 ✅ Completado.** La capa de transport/receive salió de `app.js`. Lo que queda (screen switching, form handlers) es un corte menor que puede hacerse como parte de 10.2.
 
-### 6. Fase 10.1.1 — Transport layer: `sendDocument` + P4-2 folded in ✅ Implementado
+### 6. Fase 10.1.1 — Transport layer: `sendDocument` + P4-2 folded in ✅ Completado
 `pwa/core/transport/` (types, chunked-text, document, server-bridge, index) y `pwa/core/receive/` (from-query-param, from-shared-file, from-server-push, index) creados. `app.js` actualizado: `sendCiphertext()` y `resolveIncoming()`. `deeplink.js` eliminado. `transport.test.mjs`: 28 tests nuevos. 53/53 JS pass.
+
+**Web Share Target completado** ✅ — `pwa/manifest.json` ahora incluye `share_target` para archivos `.txt`. Service Worker maneja POST requests del share target y almacena archivos compartidos temporalmente en IndexedDB. Receptor puede compartir archivos .txt desde Telegram directamente con la app (flujo "un tap") en lugar del flujo manual anterior.
 
 ### 7. Fase 10.2 — Envío de imágenes (sin cifrar) ← PRÓXIMO
 Una vez que `app.js` está dividido y `sendDocument` está implementado, agregar el selector de archivos y `sendPhoto`/`sendMediaGroup`. Las imágenes viajan sin cifrar en esta fase — intencional, documentado en la UI.
