@@ -67,7 +67,7 @@ env:
   NODE_VERSION: "20"
   JAVA_VERSION: "17"
   JAVA_DISTRO: "temurin"
-  BUBBLEWRAP_VERSION: "latest"
+  BUBBLEWRAP_VERSION: "1.21.1"
   PACKAGE_NAME: "com.tangocifrado.app"
   MANIFEST_URL: "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/manifest.json"
   APK_DIR: "tango-cifrado-apk"
@@ -107,8 +107,17 @@ jobs:
           cache: "npm"
 
       - name: Install @bubblewrap/cli
+        env:
+          # CI=true silences most npm postinstall interactive prompts.
+          # BUBBLEWRAP_SKIP_JAVA_CHECK=1 specifically skips the JDK prompt
+          # that bubblewrap's postinstall fires when it detects no JDK in PATH
+          # (we already installed JDK via setup-java, but the check runs before
+          # PATH is updated in the same shell, causing exit 130 / SIGINT).
+          CI: "true"
+          BUBBLEWRAP_SKIP_JAVA_CHECK: "1"
         run: |
-          npm install -g @bubblewrap/cli@${{ env.BUBBLEWRAP_VERSION }}
+          # Belt-and-suspenders: also pipe 'n' in case any prompt slips through
+          printf 'n\nn\n' | npm install -g @bubblewrap/cli@${{ env.BUBBLEWRAP_VERSION }}
           bubblewrap --version
 
       # ---------- Android SDK (Bubblewrap lo necesita para Gradle) ----------
