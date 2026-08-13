@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [Unreleased] - 2026-08-13 (session 6 round 4 — APK build code cleanup)
+
+### Fixed
+- **APK build code quality issues** — systematic code review found and fixed several maintenance issues in CI workflows and scripts:
+  - **Variable naming inconsistency** in `.github/workflows/build-twa-apk.yml`: simplified awkward `ANDROID_KEY_PASSWORD_INPUT` → `ANDROID_KEY_PASSWORD` to match the secret name and improve maintainability.
+  - **Missing error handling in Python inline scripts** — both `.github/workflows/build-twa-apk.yml` and `.github/workflows/build-encrypted-bundle.yml` had inline Python scripts without `try/except` blocks. Added proper error handling with descriptive messages and `sys.exit(1)` for failures. Scripts now fail fast with clear error messages instead of cryptic stack traces.
+  - Verified no duplicate lines exist in APK build scripts (previous analysis found scripts are already clean).
+
+### Technical Details
+- **CI workflow robustness**: Python script failures in CI now show meaningful error messages like `"❌ Error generating twa-manifest.json: [specific exception]"` instead of raw Python tracebacks.
+- **Code consistency**: All `ANDROID_KEY_PASSWORD*` references now use the same base name as the GitHub secret, reducing cognitive load for maintainers.
+- **Error propagation**: Both workflows now properly exit with code 1 on Python failures, preventing silent failures that could lead to malformed APKs or deployment issues.
+
+---
+
 ## [Unreleased] - 2026-08-13 (session 6 round 3 — comprehensive TO_FIX.md audit completion)
 
 ### Resolution Summary

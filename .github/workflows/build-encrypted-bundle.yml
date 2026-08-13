@@ -88,21 +88,25 @@ jobs:
         id: bundle-meta
         run: |
           python3 - <<'PY'
-          import json, hashlib, os, pathlib
-          data_b = pathlib.Path("pwa/encrypted-bundle.json").read_bytes()
-          parsed = json.loads(data_b.decode())
-          sha = hashlib.sha256(data_b).hexdigest()[:12]
-          gen = parsed.get("generated_at", "unknown")
-          # Write both outputs atomically to GITHUB_OUTPUT so downstream
-          # (deploy-to-public-repo) can use needs.build.outputs.generated_at
-          # and the deploy summary can compare old_sha/new_sha without
-          # recomputing.
-          out_path = os.environ["GITHUB_OUTPUT"]
-          with open(out_path, "a") as out:
-              out.write(f"sha={sha}\n")
-              out.write(f"generated_at={gen}\n")
-          print(f"sha={sha}")
-          print(f"generated_at={gen}")
+          try:
+              import json, hashlib, os, pathlib
+              data_b = pathlib.Path("pwa/encrypted-bundle.json").read_bytes()
+              parsed = json.loads(data_b.decode())
+              sha = hashlib.sha256(data_b).hexdigest()[:12]
+              gen = parsed.get("generated_at", "unknown")
+              # Write both outputs atomically to GITHUB_OUTPUT so downstream
+              # (deploy-to-public-repo) can use needs.build.outputs.generated_at
+              # and the deploy summary can compare old_sha/new_sha without
+              # recomputing.
+              out_path = os.environ["GITHUB_OUTPUT"]
+              with open(out_path, "a") as out:
+                  out.write(f"sha={sha}\n")
+                  out.write(f"generated_at={gen}\n")
+              print(f"sha={sha}")
+              print(f"generated_at={gen}")
+          except Exception as e:
+              print(f"❌ Error extracting bundle metadata: {e}", file=sys.stderr)
+              sys.exit(1)
           PY
 
   deploy-to-public-repo:

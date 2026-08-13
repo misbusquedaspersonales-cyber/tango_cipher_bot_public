@@ -169,49 +169,53 @@ jobs:
             PACKAGE_NAME="${PACKAGE_NAME:-com.tangocifrado.app}"
             ALIAS="${ANDROID_KEY_ALIAS:-android}"
             python3 - "$PACKAGE_NAME" "$ALIAS" "${{ env.MANIFEST_URL }}" <<'PY'
-            import json, sys
-            pkg, alias, manifest_url = sys.argv[1:4]
-            # Extraemos host y pathname del manifest URL para derivar startUrl
-            from urllib.parse import urlparse
-            p = urlparse(manifest_url)
-            host = p.netloc
-            # startUrl = /path/to/pwa/index.html (sin el manifest.json)
-            base_path = p.path.rsplit("/", 1)[0]
-            start_path = f"{base_path}/index.html?src=twa-apk"
-            base_prefix = manifest_url.rsplit("/", 1)[0]
-            data = {
-              "packageId": pkg,
-              "host": host,
-              "name": "Tango Cifrado",
-              "launcherName": "Tango Cifrado",
-              "themeColor": "#1a110f",
-              "backgroundColor": "#1a110f",
-              "navigationColor": "#1a110f",
-              "navigationColorDark": "#0a0605",
-              "navigationDividerColor": "#2a1a15",
-              "startUrl": start_path,
-              "iconUrl": f"{base_prefix}/icons/icon-512.png",
-              "maskableIconUrl": f"{base_prefix}/icons/icon-maskable-512.png",
-              "display": "standalone",
-              "orientation": "portrait",
-              "minSdkVersion": 21,
-              "targetSdkVersion": 34,
-              "serviceAccountJsonFile": "",
-              "fingerprints": [],
-              "enableNotifications": False,
-              "enableGeolocation": False,
-              "enableSiteSettingsShortcut": True,
-              "isChromeOSOnly": False,
-              "isMetaQuery": False,
-              "retainedBundles": [],
-              "versionCode": 1,
-              "versionName": "1.0.0",
-              "signingKey": {"path": "./android.keystore", "alias": alias},
-              "splashScreenFadeOutDuration": 300,
-            }
-            with open("twa-manifest.json", "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-                f.write("\n")
+            try:
+                import json, sys
+                pkg, alias, manifest_url = sys.argv[1:4]
+                # Extraemos host y pathname del manifest URL para derivar startUrl
+                from urllib.parse import urlparse
+                p = urlparse(manifest_url)
+                host = p.netloc
+                # startUrl = /path/to/pwa/index.html (sin el manifest.json)
+                base_path = p.path.rsplit("/", 1)[0]
+                start_path = f"{base_path}/index.html?src=twa-apk"
+                base_prefix = manifest_url.rsplit("/", 1)[0]
+                data = {
+                  "packageId": pkg,
+                  "host": host,
+                  "name": "Tango Cifrado",
+                  "launcherName": "Tango Cifrado",
+                  "themeColor": "#1a110f",
+                  "backgroundColor": "#1a110f",
+                  "navigationColor": "#1a110f",
+                  "navigationColorDark": "#0a0605",
+                  "navigationDividerColor": "#2a1a15",
+                  "startUrl": start_path,
+                  "iconUrl": f"{base_prefix}/icons/icon-512.png",
+                  "maskableIconUrl": f"{base_prefix}/icons/icon-maskable-512.png",
+                  "display": "standalone",
+                  "orientation": "portrait",
+                  "minSdkVersion": 21,
+                  "targetSdkVersion": 34,
+                  "serviceAccountJsonFile": "",
+                  "fingerprints": [],
+                  "enableNotifications": False,
+                  "enableGeolocation": False,
+                  "enableSiteSettingsShortcut": True,
+                  "isChromeOSOnly": False,
+                  "isMetaQuery": False,
+                  "retainedBundles": [],
+                  "versionCode": 1,
+                  "versionName": "1.0.0",
+                  "signingKey": {"path": "./android.keystore", "alias": alias},
+                  "splashScreenFadeOutDuration": 300,
+                }
+                with open("twa-manifest.json", "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                    f.write("\n")
+            except Exception as e:
+                print(f"❌ Error generating twa-manifest.json: {e}", file=sys.stderr)
+                sys.exit(1)
             PY
             echo "✅ twa-manifest.json generado en CI (package=$PACKAGE_NAME, alias=$ALIAS)"
             head -n 25 twa-manifest.json
@@ -224,16 +228,16 @@ jobs:
       - name: bubblewrap build
         working-directory: ${{ env.APK_DIR }}
         env:
-          ANDROID_KEYSTORE_PASSWORD:   ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD_INPUT: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           export CI="${CI:-true}"
           # IMPORTANTE: keypass = keystore password por defecto (generate-keystore.sh
           # así lo hace). Solo se sobreescribe si ANDROID_KEY_PASSWORD se definió.
           export KEYSTORE_PASS="$ANDROID_KEYSTORE_PASSWORD"
-          if [ -n "${ANDROID_KEY_PASSWORD_INPUT:-}" ]; then
-            export KEYSTORE_KEY_PASS="$ANDROID_KEY_PASSWORD_INPUT"
+          if [ -n "${ANDROID_KEY_PASSWORD:-}" ]; then
+            export KEYSTORE_KEY_PASS="$ANDROID_KEY_PASSWORD"
           else
             export KEYSTORE_KEY_PASS="$ANDROID_KEYSTORE_PASSWORD"
           fi
