@@ -1,10 +1,57 @@
 # MOBILE_TESTING.md — Probar la PWA como app móvil de verdad
 
-Esta guía cubre cómo llevar la PWA de "archivos en una carpeta" a "app instalada en tu celular". La **primera sección** explica la conexión / setup USB; la **segunda sección** (checklist) es específica para cada release y debe re-recorerse *antes de marcar un deploy como OK*.
+Esta guía cubre cómo llevar la PWA de "archivos en una carpeta" a "app
+instalada en tu celular". La **primera sección** explica cómo instalar; la
+**segunda sección** (checklist) es específica para cada release y debe
+re-recorrerse *antes de marcar un deploy como OK*.
+
+> ⚠️ **El APK real y "instalar la PWA desde Chrome" son dos binarios
+> distintos.** El APK (TWA, `tango-cifrado-apk/`) es el que se distribuye
+> a usuarios reales vía sideload (ver `PASOS_APK.md`) y tiene su propio
+> `AndroidManifest.xml` generado por Bubblewrap a partir de
+> `twa-manifest.json` — features nativas como el intent-filter de
+> "Compartir con esta app" (Web Share Target) dependen de ESE archivo, no
+> del `manifest.json` de la PWA web. Un cambio en `pwa/manifest.json` no
+> llega automáticamente al APK: hace falta rebuildear con
+> `build-apk.sh` (que ahora corre `sync-share-target.sh` en cada build,
+> ver más abajo) y reinstalar. Por eso el checklist de regresión de cada
+> release debe correrse sobre **el .apk firmado real**, no solo sobre la
+> PWA instalada desde Chrome — este último camino queda documentado como
+> **alternativa** para cuando no querés/necesitás generar el ejecutable.
 
 ---
 
-## Camino rápido (Android + Chrome, local dev)
+## Camino recomendado: instalar el APK real (sideload)
+
+Este es el camino que van a usar tus destinatarios reales — es el único
+que ejercita el `AndroidManifest.xml` generado por Bubblewrap (intent
+filters, Web Share Target, ícono/nombre nativos, ausencia total de barra
+de Chrome). Si vas a validar un release antes de repartir el APK, probalo
+por acá.
+
+1. Compilar el APK (o descargarlo del último GitHub Release si ya corrió el CI):
+   ```bash
+   cd tango-cifrado-apk
+   ../scripts/apk/build-apk.sh
+   ```
+   Esto además sincroniza automáticamente cualquier cambio en
+   `pwa/manifest.json` (incluyendo `share_target`) hacia
+   `twa-manifest.json` antes de compilar — ver
+   `scripts/apk/sync-share-target.sh`.
+2. Pasar `dist/apk/app-release-signed.apk` al teléfono (Telegram, USB, Drive, etc.).
+3. Abrir el archivo → Android pide habilitar "Fuentes desconocidas" → habilitar.
+4. Instalar → abrir.
+5. **Si ya tenías una versión previa instalada**, desinstalala primero o instalá encima (mismo `packageId` + misma keystore = update válido). Cambios nativos como Web Share Target **no llegan solos** — a diferencia del contenido de la PWA (`app.js`, etc.), que sí se actualiza solo porque se sirve desde GitHub Pages.
+
+## Alternativa — sin generar el APK: instalar como PWA desde Chrome
+
+Útil para iterar rápido en desarrollo, o si preferís no generar el
+ejecutable Android todavía. **No sustituye** al checklist sobre el APK
+real antes de un release — ver la advertencia arriba: algunas features
+nativas (Web Share Target entre ellas) solo se validan de verdad sobre el
+`.apk` firmado.
+
+### Camino rápido (Android + Chrome, local dev)
 
 1. En la carpeta del proyecto, levantar un servidor local:
    ```bash
@@ -16,7 +63,7 @@ Esta guía cubre cómo llevar la PWA de "archivos en una carpeta" a "app instala
 5. Abrir `http://localhost:8000/pwa/index.html` desde el navegador del celular.
 6. Instalar la app desde el navegador y probarla como aplicación instalada.
 
-## Camino de producción (iPhone / Android real, HTTPS)
+### Camino de producción (iPhone / Android real, HTTPS)
 
 Para una experiencia real de instalación, la app debe servirse sobre HTTPS real — por ejemplo GitHub Pages:
 ```
@@ -218,36 +265,47 @@ Estos dos puntos no son cubiertos por tests automatizados y deben verificarse ma
 
 ## ✅ Checklist de regresión — Fase 10.1.1 (Web Share Target para documentos)
 
+> ⚠️ **Requiere el APK real instalado (sideload), NO alcanza con la PWA
+> instalada desde Chrome.** El intent-filter que hace aparecer "Tango
+> Cifrado" en la hoja nativa de "Compartir" de Android se genera a partir
+> de `twa-manifest.json` cuando se compila el APK — Chrome no lo expone
+> de la misma forma para una PWA instalada vía navegador. Si corrés este
+> checklist sobre la versión de Chrome y no aparece la app en "Compartir",
+> **eso es esperado** y no es un bug — repetí sobre el `.apk`.
+
+**Pre-requisito:** compilaste el APK con `build-apk.sh` *después* de que
+`sync-share-target.sh` corriera sin errores (lo hace automáticamente, ver
+arriba). Si tenías una instalación vieja del APK (antes de este parche),
+desinstalala primero — el intent-filter nuevo no aparece con un simple
+update de contenido.
+
 Esta sección valida el flujo completo de compartir archivos .txt desde Telegram usando el menú nativo "Compartir" del sistema operativo. Web Share Target tiene comportamientos específicos por plataforma que requieren verificación en dispositivo real.
 
-### 10.1.1-A. Android: archivo .txt compartido desde Telegram aparece en menú nativo
-
-**Contexto:** `pwa/manifest.json` ahora incluye `share_target` para archivos `text/plain`. Cuando el receptor toca "Compartir" en un archivo .txt en Telegram, el sistema operativo debería mostrar "Tango Cifrado" como una opción en el menú de compartir.
+### 10.1.1-A. Compartir un `.txt` desde Telegram → la app aparece como destino
 
 **Setup:**
-- Dispositivo Android con la PWA instalada como standalone app.
-- Dispositivo emisor configurado para enviar via `documentTransport` (mensaje largo >1200 chars).
+- Emisor: cualquier dispositivo, cifra un mensaje **largo** (>1200
+  caracteres aprox., para forzar que `selectTransport()` elija
+  `documentTransport` en vez de chunked-text) y lo envía a Telegram. Ver
+  `core/transport/index.js` — el mensaje debe llegar como archivo
+  `mensaje.txt` adjunto, no como texto plano en el chat.
+- Receptor: teléfono Android con el **.apk real** instalado (no la PWA
+  vía Chrome) y Telegram instalado.
 
 **Pasos:**
-1. En el emisor: crear un mensaje largo que fuerce `documentTransport` (ej: texto de 2000+ caracteres). Cifrar y enviar a Telegram.
-2. Verificar en Telegram que llegó como archivo adjunto `.txt` (no como mensaje de texto fragmentado).
-3. En el receptor Android: abrir Telegram, ir al chat, ver el archivo adjunto.
-4. **Tap largo** en el archivo .txt para abrir el menú contextual.
-5. Tocar **"Compartir"** (no "Abrir con" - son flujos diferentes).
-6. Observar la lista de apps disponibles para compartir.
+1. En el receptor, abrir el chat de Telegram donde llegó `mensaje.txt`.
+2. Mantener presionado el archivo (o usar el ícono de reenviar/compartir de Telegram) → **Compartir**.
+3. En la hoja de compartir nativa de Android, buscar **"Tango Cifrado"** en la lista de apps.
 
 **Resultado esperado:**
-- "Tango Cifrado" aparece en la lista de apps (puede estar en un submenu "Ver más" dependiendo del launcher).
-- Al tocar "Tango Cifrado", la PWA se abre en modo standalone.
-- El Service Worker procesa el POST request y almacena el archivo en IndexedDB.
-- La app redirige con `?shared_file_ready=1`.
-- El compositor se abre en modo Descifrar con el ciphertext pre-cargado.
-- Un tap en "Descifrar" muestra el mensaje original completo.
+- "Tango Cifrado" aparece como destino de compartir (no solo "Guardar en Archivos" u otras apps genéricas de texto).
+- Tocarlo abre la app en modo standalone (sin barra de Chrome) directamente en el compositor, modo **Descifrar**, con el ciphertext ya cargado en el textarea.
+- Un toque en Descifrar muestra el mensaje original completo.
 
 **Resultado problemático / qué reportar si falla:**
-- Si "Tango Cifrado" no aparece en el menú compartir: verificar que el `manifest.json` está siendo servido por el Service Worker y tiene el `share_target` correcto. Reinstalar la PWA puede ser necesario para que Android detecte el nuevo manifest.
-- Si aparece pero al tocarlo abre el browser en lugar de la app standalone: problema con el `action` URL del `share_target` o con la instalación PWA.
-- Si abre la app pero el campo Descifrar está vacío: el Service Worker no está interceptando el POST request o hay error en el almacenamiento IndexedDB.
+- **"Tango Cifrado" no aparece en la hoja de compartir en absoluto:** el APK instalado fue compilado antes de este parche, o `sync-share-target.sh` no corrió (revisar el output de `build-apk.sh` — debe decir "Proyecto Android regenerado con el share_target actual" o "ya está sincronizado"). Recompilar y reinstalar limpio.
+- **Aparece pero el campo Descifrar queda vacío:** revisar en `chrome://inspect#devices` (WebView del APK) el flujo `handleShareTarget()` del service worker → IndexedDB `TangoCifradoSharedFiles` → `getSharedFileIfAvailable()` en `app.js`. Confirmar que `shared_file_ready=1` llega a la URL y que el registro `latest` existe en IndexedDB antes de que `init()` lo lea.
+- **Abre Chrome en vez de la app:** el `AndroidManifest.xml` generado no tiene el intent-filter esperado — confirmar con `aapt2 dump xmltree app-release-signed.apk --file AndroidManifest.xml | grep -A5 SEND` que existe una `<action>` para `android.intent.action.SEND` con `<category>` `DEFAULT` apuntando a la actividad de la TWA.
 
 ### 10.1.1-B. iOS: limitaciones conocidas de Web Share Target
 
@@ -286,16 +344,11 @@ Esta sección valida el flujo completo de compartir archivos .txt desde Telegram
 - Después del paso 1: debe existir un entry con `id: 'latest'`.
 - Después del paso 4: el entry debe haber sido eliminado (`getRequest.result` debería ser undefined).
 
-### 10.1.1-D. Fallback manual sigue funcionando
+### 10.1.1-B. Fallback manual sigue funcionando (sin Web Share Target)
 
-**Contexto:** El botón "Abrir archivo cifrado" debe seguir funcionando como antes para usuarios que prefieren el flujo manual o en casos donde Web Share Target no funciona.
-
-**Pasos:**
-1. Descargar manualmente un archivo .txt cifrado desde Telegram (tap en el archivo → "Descargar" o "Guardar en archivos").
-2. Abrir la PWA, modo Descifrar.
-3. Tocar **"Abrir archivo cifrado"**.
-4. Seleccionar el archivo descargado desde el file picker del sistema.
-
-**Resultado esperado:**
-- Idéntico al flujo Web Share Target: ciphertext se carga en el campo, descifrado funciona correctamente.
-- Este flujo debe funcionar en todas las plataformas independientemente del soporte de Web Share Target.
+Confirmar que el botón **"Abrir archivo cifrado"** (`#open-file-button` →
+`<input type="file">`) del compositor en modo Descifrar sigue funcionando
+para abrir `mensaje.txt` manualmente (guardado con "Guardar" desde
+Telegram en vez de "Compartir"). Debe dar el mismo resultado que el paso
+10.1.1-A — este es el camino de respaldo si Share Target falla en algún
+dispositivo/versión de Android.

@@ -90,6 +90,19 @@ if [ "${SKIP_BUBBLEWRAP_CHECK:-0}" != "1" ] && [ ! -f "$APK_DIR/twa-manifest.jso
   bubblewrap init --manifest="https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/manifest.json"
 fi
 
+# ── Sincronizar share_target (Web Share Target) hacia twa-manifest.json ─────
+# `bubblewrap init` (arriba) solo lee share_target de pwa/manifest.json la
+# PRIMERA VEZ que se genera twa-manifest.json. Si twa-manifest.json ya
+# existía de antes (como en este repo, donde se generó antes de que Fase
+# 10.1.1 agregara share_target), bubblewrap build nunca se entera del
+# cambio y compila un APK sin el intent-filter de "Compartir con esta
+# app". sync-share-target.sh corrige esto en cada build: no hace nada si
+# ya está sincronizado, y si no, actualiza twa-manifest.json y corre
+# `bubblewrap update` para regenerar el proyecto Android antes de compilar.
+if [ "${SKIP_BUBBLEWRAP_CHECK:-0}" != "1" ]; then
+  "$SCRIPT_DIR/sync-share-target.sh" "$APK_DIR"
+fi
+
 if [ -z "$RESOLVED_KEYSTORE" ]; then
   echo -e "${RED}❌ No se encontró android.keystore.${NC}"
   echo

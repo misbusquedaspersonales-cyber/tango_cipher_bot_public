@@ -13,6 +13,19 @@
   "maskableIconUrl": "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/icons/icon-maskable-512.png",
   "display": "standalone",
   "orientation": "portrait",
+  "shareTarget": {
+    "action": "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html?src=shared-file",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "shared_file",
+          "accept": ["text/plain", ".txt"]
+        }
+      ]
+    }
+  },
   "minSdkVersion": 21,
   "targetSdkVersion": 34,
   "serviceAccountJsonFile": "",
@@ -23,8 +36,8 @@
   "isChromeOSOnly": false,
   "isMetaQuery": false,
   "retainedBundles": [],
-  "versionCode": 3,
-  "versionName": "1.2.0",
+  "versionCode": 4,
+  "versionName": "1.3.0",
   "signingKey": {
     "path": "./android.keystore",
     "alias": "android"

@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## [Unreleased] - 2026-08-13 (session 6 round 6 — APK Web Share Target patches integration)
+
+### Fixed
+- **APK Web Share Target synchronization** — resolved critical gap where the distributed `.apk` (TWA) didn't inherit `share_target` from PWA manifest:
+  - Added `scripts/apk/sync-share-target.sh` to automatically synchronize `share_target` from `pwa/manifest.json` to `tango-cifrado-apk/twa-manifest.json`
+  - Updated `scripts/apk/build-apk.sh` to call sync script on every build, ensuring APK always has current Web Share Target configuration
+  - Updated `twa-manifest.json` to versionCode 4 / versionName 1.3.0 with proper `shareTarget` configuration
+  - **Root cause**: `bubblewrap init` only reads `share_target` on initial generation. Existing `twa-manifest.json` (versionCode 3) predated Fase 10.1.1 Web Share Target implementation, so APK builds never included the Android intent-filter for "Share with this app"
+
+### Changed
+- **Mobile testing priority** — updated `MOBILE_TESTING.md` to prioritize APK testing over PWA-via-Chrome:
+  - Added warnings that Web Share Target requires the real `.apk` (sideload), not PWA installed from Chrome browser
+  - Reorganized installation instructions: APK sideload as recommended path, Chrome PWA as alternative for development
+  - Updated section 10.1.1 checklist to focus on APK-specific validation and troubleshooting
+- **ROADMAP.md Fase 10.1.1** — added note about the detected gap and its resolution, marked as completed with APK sync functionality
+
+### Technical Details
+- **Automatic synchronization**: `sync-share-target.sh` compares PWA and TWA manifests, updates `twa-manifest.json` when needed, and runs `bubblewrap update` to regenerate `AndroidManifest.xml`
+- **Build integration**: APK builds now sync manifests before compilation, ensuring distributed APKs always have current share target configuration
+- **Version bump**: APK updated from 1.2.0 → 1.3.0 to reflect Web Share Target support for native Android intent handling
+
+---
+
 ## [Unreleased] - 2026-08-13 (session 6 round 5 — PWA Share Target implementation)
 
 ### Added
