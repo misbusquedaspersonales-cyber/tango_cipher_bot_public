@@ -6,6 +6,8 @@ Cifrado por libro basado en un corpus privado de letras de tango (`tangos.json`)
 
 El corpus y el SALT nunca viajan en texto plano: GitHub Actions los cifra con AES-256-GCM antes de publicar la PWA. En el dispositivo quedan guardados en IndexedDB tras un único desbloqueo en el primer arranque.
 
+**Envío de mensajes largos:** Los ciphertexts largos (>1200 chars) se envían automáticamente como archivos `.txt` adjuntos vía `sendDocument` de Telegram. Los receptores pueden compartir estos archivos directamente con la app usando el menú nativo "Compartir" de Android (Web Share Target), eliminando pasos manuales.
+
 **PWA en Vivo:** [tango_cipher_bot_public/pwa](https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html)
 
 ### URLs cortas y atajos de acceso
@@ -96,13 +98,13 @@ $ tango
 | `scripts/ci/decrypt_bundle_cli.py` | Ídem — copia de referencia local. La versión activa está en el repo privado. |
 | `scripts/dev/setup_private_core.sh` | Configura el entorno local clonando el repo privado en un estado "vendored" (pinneado a un commit SHA). |
 | `scripts/aliases/` | Comandos cortos de terminal: `tango` (abrir PWA), `tango-url` (copiar URL al clipboard), `tango-cli` (wrapper del CLI local). |
-| `scripts/apk/` | Scripts helpers del flujo TWA / APK (Fase 9): `install-deps.sh` (Node20 + JDK17 + Bubblewrap con detección root/sudo), `generate-keystore.sh` (RSA-2048 con chequeo de passwords comprometidos + modo CI), `generate-assetlinks.sh` (SHA256 de keystore → escribe assetlinks.json en AMBAS carpetas `.well-known/` y `pwa/.well-known/`), `build-apk.sh` (wrapper idempotente de `bubblewrap build` con `--ignore-scripts` + auto-init si falta `twa-manifest.json`). |
-| `tango-cifrado-apk/` | Proyecto wrapper Android TWA (Trusted Web Activity). Contiene `twa-config.json` (defaults de Bubblewrap), `.gitignore` (incluye `strings.xml` + `colors.xml` como stubs — ver TO_FIX M-2), README con lifecycle de actualizaciones y flujo rápido. `twa-manifest.json` y `android.keystore` son **no versionables** (generados por `bubblewrap init` y `generate-keystore.sh` respectivamente). APK final se sube a GitHub Releases desde el CI. |
+| `scripts/apk/` | Scripts helpers del flujo TWA / APK (Fase 9): `install-deps.sh` (Node20 + JDK17 + Bubblewrap con detección root/sudo), `generate-keystore.sh` (RSA-2048 con chequeo de passwords comprometidos + modo CI), `generate-assetlinks.sh` (SHA256 de keystore → escribe assetlinks.json en AMBAS carpetas `.well-known/` y `pwa/.well-known/`), `build-apk.sh` (wrapper idempotente de `bubblewrap build` con `--ignore-scripts` + auto-init si falta `twa-manifest.json` + **auto-sync de share_target**), `sync-share-target.sh` (sincroniza `pwa/manifest.json` share_target → `twa-manifest.json` shareTarget automáticamente, corriendo `bubblewrap update` cuando sea necesario). |
+| `tango-cifrado-apk/` | Proyecto wrapper Android TWA (Trusted Web Activity). Contiene `twa-config.json` (defaults de Bubblewrap), `.gitignore` (incluye `strings.xml` + `colors.xml` como stubs — ver TO_FIX M-2), README con lifecycle de actualizaciones y flujo rápido. `twa-manifest.json` y `android.keystore` son **no versionables** (generados por `bubblewrap init` y `generate-keystore.sh` respectivamente). **Web Share Target**: `twa-manifest.json` se mantiene sincronizado automáticamente con `pwa/manifest.json` via `sync-share-target.sh` en cada build, asegurando que el APK incluya los intent-filters correctos para "Compartir con esta app". APK final se sube a GitHub Releases desde el CI. |
 | `NEXTPASOS_APK.md` | Checklist 6-pasos para build local del APK (publish assetlinks → verificación Google → `build-apk.sh` → sideload → config de 4 secrets CI). Referencia rápida del flujo TWA completo. |
 | `.github/workflows/build-twa-apk.yml` | GitHub Actions de Fase 9.3 — APK automático en cada `workflow_dispatch` o push de tags `apk/v*`. Triggers: secret guard → Temurin JDK17 → Node20 → Bubblewrap `--ignore-scripts` → Android SDK 11076708 → rebuild keystore desde base64 secret → `bubblewrap init` si falta `twa-manifest.json` → `bubblewrap build` con bypass de TODOS los prompts interactivos → **Smoke-test APK strings (M-2 guard)** (aapt2 dump: `hostName`/`launchUrl`/`colorPrimary` no vacíos ni stubs) → upload artifact 30 días → GitHub Release assets → `always()` wipe keystore. |
 | `.github/workflows/build-encrypted-bundle.yml` | GitHub Actions workflow de build (solo en el repo privado). |
 | `.github/workflows/drift-check.yml` | GitHub Actions workflow semanal: compara el `PRIVATE_CORE_COMMIT` pinneado contra el HEAD del repo privado y abre Issue automático si detecta drift. Requiere el secreto `PRIVATE_REPO_PAT`. |
-| `tests/` | 119 tests total once `private_core/` is populated: 53 JS (`tests/js/`) + 24 Python always-runnable (`test_build_encrypted_bundle.py` 5 + `test_telegram_client.py` 8 + `test_check_coverage.py` 11) + 43 Python requiring `private_core/` (`test_cipher_engine.py`: 33 original + 11 shared vectors). JS breakdown: `cipherEngine.test.mjs` 27 (16 fixed + 11 shared-vector loop), `pwa_e2e.test.mjs` 3, `transport.test.mjs` 24 (transport layer + receive + invariant). Run `python3 -m pytest tests/python/ -v` and `npm test` separately. |
+| `tests/` | 117 tests total once `private_core/` is populated: 60 JS (`tests/js/`) + 14 Python always-runnable (`test_build_encrypted_bundle.py` 5 + `test_telegram_client.py` 9) + 43 Python requiring `private_core/` (`test_cipher_engine.py`: 32 original + 11 shared vectors). JS breakdown: `cipherEngine.test.mjs` 27 (16 fixed + 11 shared-vector loop), `pwa_e2e.test.mjs` 6 (3 original + 3 Web Share Target), `transport.test.mjs` 27 (transport layer + receive + invariant + TokenOverflowError). Run `python3 -m pytest tests/python/ -v` and `npm test` separately. |
 
 ## Setup del CLI (desarrollo / pruebas)
 
@@ -162,9 +164,25 @@ Correrlo antes de cualquier PR que toque `pwa/`:
 python3 scripts/dev/check_pwa_assets.py
 ```
 
-### Probar la PWA instalada en un celular real
+## Probar la PWA instalada en un celular real
 
-Ver `MOBILE_TESTING.md` (USB port-forwarding con `chrome://inspect`, camino de producción por HTTPS, y checklist: standalone, íconos sin fallback, offline, desbloqueo del bundle).
+Ver `MOBILE_TESTING.md` para el checklist completo. Dos caminos principales:
+
+### Opción recomendada: APK real (sideload)
+
+Compila e instala el APK firmado — este es el binario que usarán los destinatarios reales:
+
+```bash
+cd tango-cifrado-apk
+../scripts/apk/build-apk.sh
+# Pasar dist/apk/app-release-signed.apk al teléfono e instalar
+```
+
+**Web Share Target**: El APK incluye intent-filters nativos que permiten compartir archivos `.txt` desde Telegram directamente con la app usando el menú "Compartir" de Android. El script `sync-share-target.sh` se ejecuta automáticamente en cada build para mantener sincronizado el `share_target` de la PWA con el `shareTarget` del APK.
+
+### Opción alternativa: PWA vía Chrome  
+
+Para desarrollo rápido (USB port-forwarding con `chrome://inspect`, camino de producción por HTTPS). **Nota**: algunas funcionalidades nativas como Web Share Target requieren el APK real para validación completa.
 
 ## Seguridad — notas importantes
 
