@@ -67,7 +67,7 @@ env:
   NODE_VERSION: "20"
   JAVA_VERSION: "17"
   JAVA_DISTRO: "temurin"
-  BUBBLEWRAP_VERSION: "1.21.0"
+  BUBBLEWRAP_VERSION: "1.25.0"
   PACKAGE_NAME: "com.tangocifrado.app"
   MANIFEST_URL: "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/manifest.json"
   APK_DIR: "tango-cifrado-apk"
