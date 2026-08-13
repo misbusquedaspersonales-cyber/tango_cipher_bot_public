@@ -87,7 +87,7 @@
     1. Token entra en el budget después de proyectar el prefix → emite chunk.
     2. `fit < 16` (budget marginal): **throw `TokenOverflowError` descriptivo** con props `tokenLength`, `maxLen`, `budget`, `chunkIndex` y texto de error en español explicando que la tira de dígitos sin separadores produce un fallback XOR único demasiado largo.
     3. Si no: **byte-split** `token.slice(0, fit)` + `tokens.splice(t+1, 0, slice2)` — el resto se reprocesa en la próxima iteración (loop es seguro, se vuelve a entrar en este branch si `slice2` sigue siendo oversized).
-- **Tests CHANGELOGEjados**: `tests/js/transport.test.mjs` → incluye tests para `TokenOverflowError` y byte-splitting. No hay forma de producir chunks oversized sin caer en una de las 3 vías. OK.
+- **Tests verificados**: `tests/js/transport.test.mjs` → 3 nuevos tests cubren: single oversized token byte-split, TokenOverflowError con props verificadas, multi-stage splitting. Todos los caminos del branch C-1 están cubiertos. ✅
 
 ### [x] C-2: No partial-send recovery on mid-send network failure
 

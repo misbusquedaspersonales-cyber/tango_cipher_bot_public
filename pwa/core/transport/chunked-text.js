@@ -92,11 +92,6 @@ export function chunkCipherText(codigo, maxLen = TELEGRAM_TEXT_MAX) {
     // chunk, slicing on "-" (token has no dashes, so we byte-slice).
     // If slicing produces empty remainder → we accept that this chunk
     // alone slightly exceeds the budget (throw below).
-    const chunkBudgetAfterPrefix = prefixIndex => {
-      // 2 chars for [ / ], 1 for /, 1 for space, 2x2 for digits worst case
-      const pfx = `[${prefixIndex + 1}/99] `.length;
-      return maxLen - pfx;
-    };
     const alone = current.length === 0;
     if (alone && token.length > effectiveMax) {
       // Try to fit a byte-sliced prefix of the token, then append the

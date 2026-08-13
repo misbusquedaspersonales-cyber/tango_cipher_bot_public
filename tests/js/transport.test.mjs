@@ -92,6 +92,81 @@ test('chunkCipherText: reassembles to original', () => {
   assert.equal(stripped.join('-'), cipher);
 });
 
+// ---------- C-1 TokenOverflowError tests ----------
+
+test('chunkCipherText: single oversized token byte-splits correctly', () => {
+  // Create a single token that exceeds effectiveMax (4088 for maxLen=4096) but has room for prefix
+  const oversizedToken = '#' + 'A'.repeat(4200); // 4201 chars total
+  const maxLen = 4096;
+  const effectiveMax = maxLen - 8; // 4088
+
+  assert.ok(oversizedToken.length > effectiveMax, 'token must be oversized for test');
+
+  const result = chunkCipherText(oversizedToken, maxLen);
+  assert.ok(result.length >= 2, 'oversized token should split into multiple chunks');
+
+  // Verify all chunks respect maxLen limit
+  for (const chunk of result) {
+    assert.ok(chunk.length <= maxLen, `chunk "${chunk.slice(0, 50)}..." exceeds maxLen`);
+  }
+
+  // Verify chunks have proper [i/N] prefixes
+  assert.ok(result[0].match(/^\[1\/\d+\]/), 'first chunk has [1/N] prefix');
+  assert.ok(result[result.length - 1].match(/^\[\d+\/\d+\]/), 'last chunk has [i/N] prefix');
+
+  // Verify byte-split reconstruction preserves original token
+  const stripped = result.map(c => c.replace(/^\[\d+\/\d+\] /, '')).join('');
+  assert.equal(stripped, oversizedToken, 'byte-split chunks should reconstruct original token');
+});
+
+test('chunkCipherText: extremely oversized token throws TokenOverflowError', () => {
+  // Create a token so large that even with minimum prefix it exceeds maxLen
+  const hugeToken = '#' + 'A'.repeat(5000); // Way bigger than any reasonable limit
+  const tinyMaxLen = 20; // Small limit to force the fit < 16 condition
+
+  assert.throws(
+    () => chunkCipherText(hugeToken, tinyMaxLen),
+    {
+      name: 'TokenOverflowError',
+      message: /Token de longitud \d+ excede el presupuesto/,
+    },
+    'should throw TokenOverflowError for impossibly large tokens'
+  );
+
+  try {
+    chunkCipherText(hugeToken, tinyMaxLen);
+    assert.fail('should have thrown TokenOverflowError');
+  } catch (err) {
+    assert.equal(err.name, 'TokenOverflowError');
+    assert.equal(typeof err.tokenLength, 'number');
+    assert.equal(typeof err.maxLen, 'number');
+    assert.equal(typeof err.budget, 'number');
+    assert.equal(typeof err.chunkIndex, 'number');
+    assert.ok(err.tokenLength > err.maxLen, 'tokenLength should exceed maxLen');
+    assert.ok(
+      err.message.includes('números extremadamente largos'),
+      'should suggest fixing digit runs'
+    );
+  }
+});
+
+test('chunkCipherText: multi-stage byte-splitting for very long tokens', () => {
+  // Test that a token requiring multiple splits eventually succeeds
+  const veryLongToken = '#' + 'B'.repeat(12000); // Requires multiple 4KB splits
+  const result = chunkCipherText(veryLongToken, 4096);
+
+  assert.ok(result.length >= 3, 'very long token should require multiple splits');
+
+  // All chunks should be within limit
+  for (const chunk of result) {
+    assert.ok(chunk.length <= 4096, 'each chunk must be within maxLen');
+  }
+
+  // Reconstruction should match original
+  const reconstructed = result.map(c => c.replace(/^\[\d+\/\d+\] /, '')).join('');
+  assert.equal(reconstructed, veryLongToken, 'multi-stage split should preserve original');
+});
+
 // ---------- buildDeepLink ----------
 
 test('buildDeepLink: uses ?c= query param (not fragment)', () => {
