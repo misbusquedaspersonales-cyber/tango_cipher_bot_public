@@ -38,6 +38,39 @@ app/debug/
 twa-manifest.json.bak
 .bubblewrap/
 
+# ============================================================
+# Recursos Android generados por Bubblewrap
+# ============================================================
+# Las versiones commiteadas de estos dos archivos son STUBS
+# incompletos (solo assetStatements + shortcut_background),
+# usados SOLO para que el árbol compile sin Gradle.
+# Bubblewrap regenera los valores REALES (hostName, launchUrl,
+# fallbackType, colorPrimary, colorPrimaryDark, etc.) en
+# app/build/generated/res/ en cada `bubblewrap build` a partir
+# de twa-manifest.json.
+#
+# Si alguien creyera que los stubs commiteados son los reales,
+# y el workflow CI se salteara `bubblewrap update`, el APK
+# compilaría sin errores pero tendría strings vacíos y
+# quedaría inutilizable — TROUBLE.md M-2 describe el caso.
+# Mantenerlos EN .gitignore asegura que:
+#   (a) nadie edite los stubs creyendo que cambian el APK
+#   (b) `git status` advierta si Bubblewrap/Android Studio
+#       regeneró el archivo por error al abrir el proyecto.
+#
+# Si necesitás versionar un recurso real (ej: un ícono custom
+# en res/drawable/), agregalo EXPLÍCITAMENTE con un !pattern
+# en la sección siguiente.
+app/src/main/res/values/strings.xml
+app/src/main/res/values/colors.xml
+
+# ============================================================
+# Excepciones: recursos que SÍ deben permanecer versionados
+# ============================================================
+# (Agregue patterns con el prefijo ! aquí si algún recurso
+#  real colisiona con los globs de arriba.)
+
+
 # Android Studio / IntelliJ
 .idea/
 *.iml

@@ -18,20 +18,20 @@
  * @returns {string|null} decoded ciphertext, or null if no ?c= is present
  */
 export function resolveFromQueryParam(loc = location, hist = history) {
-    const params = new URLSearchParams(loc.search);
-    const encoded = params.get("c");
-    if (!encoded) return null;
+  const params = new URLSearchParams(loc.search);
+  const encoded = params.get('c');
+  if (!encoded) return null;
 
-    // Remove ?c= from the URL immediately — before any async work — so
-    // it's gone even if vault unlock takes a few seconds.
-    params.delete("c");
-    const newSearch = params.toString() ? "?" + params.toString() : "";
-    hist.replaceState(null, "", loc.pathname + newSearch + loc.hash);
+  // Remove ?c= from the URL immediately — before any async work — so
+  // it's gone even if vault unlock takes a few seconds.
+  params.delete('c');
+  const newSearch = params.toString() ? '?' + params.toString() : '';
+  hist.replaceState(null, '', loc.pathname + newSearch + loc.hash);
 
-    try {
-        return decodeURIComponent(encoded);
-    } catch {
-        // Malformed percent-encoding — treat as no deep link rather than crash.
-        return null;
-    }
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    // Malformed percent-encoding — treat as no deep link rather than crash.
+    return null;
+  }
 }

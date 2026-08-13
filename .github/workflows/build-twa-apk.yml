@@ -155,56 +155,66 @@ jobs:
             if [ ! -f gradlew ]; then
               echo "⚠️ gradlew missing - regenerating Android project from twa-manifest.json"
               # bubblewrap init also prompts, so pipe answers: Y (update to latest spec), n (no regenerate)
-              printf 'Y\nn\n' | bubblewrap init --manifest ${{ env.MANIFEST_URL }}
+              printf 'Y\nn\n' | bubblewrap init --manifest "${{ env.MANIFEST_URL }}"
             else
               echo "✅ Android project already exists"
             fi
           else
             echo "⚠️  No hay twa-manifest.json versionada — generando uno mínimo..."
-            # Generamos un twa-manifest.json mínimo a mano. bubblewrap init
-            # requiere interacción; para CI es más robusto generar el JSON
-            # con los campos obligatorios. Bubblewrap lo lee para build.
-            cat > twa-manifest.json <<'TWAEOF'
-{
-  "packageId": "__PACKAGE_ID__",
-  "host": "misbusquedaspersonales-cyber.github.io",
-  "name": "Tango Cifrado",
-  "launcherName": "Tango Cifrado",
-  "themeColor": "#1a110f",
-  "backgroundColor": "#1a110f",
-  "navigationColor": "#1a110f",
-  "navigationColorDark": "#0a0605",
-  "navigationDividerColor": "#2a1a15",
-  "startUrl": "/tango_cipher_bot_public/pwa/index.html?src=twa-apk",
-  "iconUrl": "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/icons/icon-512.png",
-  "maskableIconUrl": "https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/icons/icon-maskable-512.png",
-  "display": "standalone",
-  "orientation": "portrait",
-  "minSdkVersion": 21,
-  "targetSdkVersion": 34,
-  "serviceAccountJsonFile": "",
-  "fingerprints": [],
-  "enableNotifications": false,
-  "enableGeolocation": false,
-  "enableSiteSettingsShortcut": true,
-  "isChromeOSOnly": false,
-  "isMetaQuery": false,
-  "retainedBundles": [],
-  "versionCode": 1,
-  "versionName": "1.0.0",
-  "signingKey": {
-    "path": "./android.keystore",
-    "alias": "__ALIAS__"
-  },
-  "splashScreenFadeOutDuration": 300
-}
-TWAEOF
+            # Generamos un twa-manifest.json mínimo a mano vía python3 para
+            # evitar cualquier interacción con bubblewrap y para no depender
+            # de un heredoc bash con terminador indentado (YAML rompe la
+            # columna cero del terminador de heredoc cuando el bloque run
+            # empieza con indentación). Ver M-3 YAML history en TO_FIX.md.
             PACKAGE_NAME="${PACKAGE_NAME:-com.tangocifrado.app}"
             ALIAS="${ANDROID_KEY_ALIAS:-android}"
-            sed -i "s/__PACKAGE_ID__/$PACKAGE_NAME/" twa-manifest.json
-            sed -i "s/__ALIAS__/$ALIAS/"                 twa-manifest.json
+            python3 - "$PACKAGE_NAME" "$ALIAS" "${{ env.MANIFEST_URL }}" <<'PY'
+            import json, sys
+            pkg, alias, manifest_url = sys.argv[1:4]
+            # Extraemos host y pathname del manifest URL para derivar startUrl
+            from urllib.parse import urlparse
+            p = urlparse(manifest_url)
+            host = p.netloc
+            # startUrl = /path/to/pwa/index.html (sin el manifest.json)
+            base_path = p.path.rsplit("/", 1)[0]
+            start_path = f"{base_path}/index.html?src=twa-apk"
+            base_prefix = manifest_url.rsplit("/", 1)[0]
+            data = {
+              "packageId": pkg,
+              "host": host,
+              "name": "Tango Cifrado",
+              "launcherName": "Tango Cifrado",
+              "themeColor": "#1a110f",
+              "backgroundColor": "#1a110f",
+              "navigationColor": "#1a110f",
+              "navigationColorDark": "#0a0605",
+              "navigationDividerColor": "#2a1a15",
+              "startUrl": start_path,
+              "iconUrl": f"{base_prefix}/icons/icon-512.png",
+              "maskableIconUrl": f"{base_prefix}/icons/icon-maskable-512.png",
+              "display": "standalone",
+              "orientation": "portrait",
+              "minSdkVersion": 21,
+              "targetSdkVersion": 34,
+              "serviceAccountJsonFile": "",
+              "fingerprints": [],
+              "enableNotifications": False,
+              "enableGeolocation": False,
+              "enableSiteSettingsShortcut": True,
+              "isChromeOSOnly": False,
+              "isMetaQuery": False,
+              "retainedBundles": [],
+              "versionCode": 1,
+              "versionName": "1.0.0",
+              "signingKey": {"path": "./android.keystore", "alias": alias},
+              "splashScreenFadeOutDuration": 300,
+            }
+            with open("twa-manifest.json", "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+                f.write("\n")
+            PY
             echo "✅ twa-manifest.json generado en CI (package=$PACKAGE_NAME, alias=$ALIAS)"
-            cat twa-manifest.json | head -n 25
+            head -n 25 twa-manifest.json
           fi
         env:
           PACKAGE_NAME:      ${{ env.PACKAGE_NAME }}
@@ -213,34 +223,58 @@ TWAEOF
       # ---------- Compilar ----------
       - name: bubblewrap build
         working-directory: ${{ env.APK_DIR }}
+        env:
+          ANDROID_KEYSTORE_PASSWORD:   ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD_INPUT: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           export CI="${CI:-true}"
+          # IMPORTANTE: keypass = keystore password por defecto (generate-keystore.sh
+          # así lo hace). Solo se sobreescribe si ANDROID_KEY_PASSWORD se definió.
           export KEYSTORE_PASS="$ANDROID_KEYSTORE_PASSWORD"
-          export KEYSTORE_KEY_PASS="${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
-          
-          # Create bubblewrap config file directly to bypass all prompts
+          if [ -n "${ANDROID_KEY_PASSWORD_INPUT:-}" ]; then
+            export KEYSTORE_KEY_PASS="$ANDROID_KEY_PASSWORD_INPUT"
+          else
+            export KEYSTORE_KEY_PASS="$ANDROID_KEYSTORE_PASSWORD"
+          fi
+          export BUBBLEWRAP_KEY_PASSWORD="$KEYSTORE_KEY_PASS"
+
+          # Crea config.json para bubblewrap de una vez (bypassea TODOS los prompts
+          # interactivos: JDK path, SDK path, etc). Ver M-3 en TO_FIX.md para
+          # historia completa de los prompts salteados aquí.
           mkdir -p ~/.bubblewrap
           printf '{\n  "jdkPath": "%s",\n  "androidSdkPath": "%s"\n}\n' \
             "$JAVA_HOME" "$ANDROID_SDK_ROOT" > ~/.bubblewrap/config.json
-          
-          # Fix Android SDK structure for bubblewrap compatibility
-          # Bubblewrap expects tools/bin/sdkmanager but modern SDK has cmdline-tools/latest/bin/
+
+          # Compatibilidad SDK: Bubblewrap legacy busca tools/bin/sdkmanager; el
+          # setup-android moderno instala en cmdline-tools/latest/bin/.
           if [ ! -d "$ANDROID_SDK_ROOT/tools" ] && [ -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
             echo "Creating tools symlink for bubblewrap compatibility..."
             ln -s "$ANDROID_SDK_ROOT/cmdline-tools/latest" "$ANDROID_SDK_ROOT/tools"
           fi
-          
-          # Ensure gradlew is executable (git checkout may strip execute bit)
+
+          # Si el proyecto Android no fue regenerado (no hay gradlew), forzamos un
+          # bubblewrap init auto-respondido ANTES del build. El build por sí solo
+          # no regenera los fuentes si los stub de strings.xml/colors.xml están
+          # desactualizados (ver M-2 en TO_FIX.md).
+          if [ ! -x ./gradlew ]; then
+            echo "⚠️  ./gradlew no existe — regenerando proyecto Android desde twa-manifest.json..."
+            # Respuestas al wizard de init en orden:
+            #   Y = "Update project to latest Bubblewrap spec?" (si el JSON viejo)
+            #   Y = "Do you want Bubblewrap to manage the Android SDK?"
+            { printf 'Y\nY\n'; } | bubblewrap init --manifest "${{ env.MANIFEST_URL }}" > init.log 2>&1 || {
+              echo "❌ bubblewrap init falló. Primeras 30 líneas de init.log:"
+              head -n 30 init.log
+              exit 1
+            }
+            echo "✅ Proyecto Android regenerado."
+          fi
           chmod +x ./gradlew
-          
-          # Answer "n" to "regenerate project?" prompt
-          # Keystore passwords are read from env vars BUBBLEWRAP_KEYSTORE_PASSWORD and BUBBLEWRAP_KEY_PASSWORD
+
+          # "n" = "¿Regenerar el proyecto desde twa-manifest.json?" — respondemos No
+          # porque los archivos ya existen (fueron generados por init arriba o ya
+          # estaban versionados). Keystore passwords leídos desde BUBBLEWRAP_* vars.
           printf 'n\n' | bubblewrap build --skipPwaValidation
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD:      ${{ secrets.ANDROID_KEY_PASSWORD }}
-          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          BUBBLEWRAP_KEY_PASSWORD:      ${{ secrets.ANDROID_KEY_PASSWORD != '' && secrets.ANDROID_KEY_PASSWORD || secrets.ANDROID_KEYSTORE_PASSWORD }}
         timeout-minutes: 45
 
       # ---------- Encontrar artefactos ----------
@@ -265,6 +299,68 @@ TWAEOF
           # Multi-line output: listado separado por comas para upload-artifact
           FILES_CSV=$(find "$OUT_DIR" -maxdepth 1 -type f \( -name "*.apk" -o -name "*.aab" \) -printf '%p\n' | paste -sd ',' -)
           echo "files_csv=$FILES_CSV" >> "$GITHUB_OUTPUT"
+
+      # ---------- Smoke-test M-2: validar que strings.xml REALES no son los stubs ----------
+      # Ver TO_FIX.md M-2: strings.xml y colors.xml commiteados son stubs
+      # incompletos. Si Bubblewrap no corrió `bubblewrap update` como parte del
+      # build, Gradle compila contra los stubs y produce un APK que abre la
+      # pantalla de splash pero crasha al navegar al start_url (hostName,
+      # launchUrl, colorPrimary están vacíos).
+      #
+      # Método: usamos aapt2 del Android SDK (instalado por
+      # android-actions/setup-android@v3) para dumpar los string RESOURCES del
+      # APK compilado. No usamos `unzip strings.xml` porque en un APK las
+      # strings se almacenan binariamente en resources.arsc.
+      #
+      # Requerimos como mínimo que existan strings con los nombres
+      # "hostName" y "launchUrl" con CONTENIDO NO VACÍO que NO sea
+      # "TODO_BUBBLEWRAP_STUB" (placeholder de los stubs locales).
+      - name: Smoke-test APK strings (M-2 guard)
+        if: steps.artifacts.outputs.count > 0
+        run: |
+          set -euo pipefail
+          # aapt2 lives under build-tools; find the latest installed version
+          AAPT2="$(find "$ANDROID_SDK_ROOT/build-tools" -maxdepth 2 -name aapt2 2>/dev/null | sort -V | tail -n1 || true)"
+          if [ -z "${AAPT2:-}" ]; then
+            echo "⚠️  aapt2 no encontrado en ANDROID_SDK_ROOT — salteando smoke test de strings.xml."
+            exit 0
+          fi
+          echo "✅ Usando aapt2: $AAPT2"
+
+          FAIL=0
+          for APK in dist/apk/*.apk; do
+            [ -f "$APK" ] || continue
+            echo "---"
+            echo "🧪 Validando recursos en $(basename "$APK") ..."
+
+            # dump de strings en modo xmltree para el recurso string/hostName.
+            # Si el string NO EXISTE o vale "", el dump devuelve exit 1 o un
+            # valor que empieza por "ERROR:".
+            for RES in hostName launchUrl colorPrimary; do
+              OUTPUT="$("$AAPT2" dump xmltree "$APK" --file res/values/strings.xml 2>&1 | grep -A 2 "name=\"${RES}\"" || true)"
+              # También leemos resources.arsc por nombre (fallback si xmltree no trae el valor)
+              ARSC_OUT="$("$AAPT2" dump resources "$APK" 2>&1 | grep -iE "string/${RES}\" " || true)"
+              if [ -z "${OUTPUT}${ARSC_OUT}" ]; then
+                echo "  ❌ FALTA string/‘${RES}’ — los stubs de M-2 se usaron. FAIL."
+                FAIL=1
+                continue
+              fi
+              # Verificamos que el valor no sea el placeholder vacío de los stubs.
+              if echo "${OUTPUT}${ARSC_OUT}" | grep -qiE '(""|TODO_BUBBLEWRAP_STUB|__PLACEHOLDER__)'; then
+                echo "  ❌ string/‘${RES}’ está VACÍO o es placeholder — FAIL."
+                FAIL=1
+                continue
+              fi
+              echo "  ✅ string/‘${RES}’ presente y no vacío."
+            done
+          done
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo "❌ Smoke test M-2 falló — APK tiene strings de stub. Ver M-2 en TO_FIX.md."
+            exit 1
+          fi
+          echo "---"
+          echo "✅ Smoke test M-2 OK en todos los APKs."
 
       - name: Upload APK + AAB as workflow artifacts
         if: steps.artifacts.outputs.count > 0

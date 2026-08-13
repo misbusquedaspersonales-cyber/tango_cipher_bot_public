@@ -29,40 +29,70 @@
  */
 
 async function describeError(resp) {
-    try {
-        const data = await resp.json();
-        return data.description ? ` (${data.description})` : "";
-    } catch {
-        return "";
-    }
+  try {
+    const data = await resp.json();
+    return data.description ? ` (${data.description})` : '';
+  } catch {
+    return '';
+  }
 }
 
 /** @type {import("./types.js").Transport} */
 export const documentTransport = {
-    async send(ciphertext, ctx) {
-        const { botToken, chatId, origin, pathname, fetchFn = fetch } = ctx;
-        const apiUrl = `https://api.telegram.org/bot${botToken}/sendDocument`;
-        const appUrl = `${origin}${pathname}`;
+  async send(ciphertext, ctx) {
+    const { botToken, chatId, origin, pathname, fetchFn = fetch } = ctx;
+    const apiUrl = `https://api.telegram.org/bot${botToken}/sendDocument`;
+    const appUrl = `${origin}${pathname}`;
 
-        const form = new FormData();
-        form.append("chat_id", chatId);
-        form.append("document", new Blob([ciphertext], { type: "text/plain" }), "mensaje.txt");
-        // No ?c= param here on purpose — see module docblock. The receiver
-        // gets the ciphertext from the attached file, not the button URL.
-        form.append("reply_markup", JSON.stringify({
-            inline_keyboard: [[{ text: "Descifrar →", url: appUrl }]],
-        }));
+    const form = new FormData();
+    form.append('chat_id', chatId);
+    form.append('document', new Blob([ciphertext], { type: 'text/plain' }), 'mensaje.txt');
+    // No ?c= param here on purpose — see module docblock. The receiver
+    // gets the ciphertext from the attached file, not the button URL.
+    form.append(
+      'reply_markup',
+      JSON.stringify({
+        inline_keyboard: [[{ text: 'Descifrar →', url: appUrl }]],
+      })
+    );
 
-        const resp = await fetchFn(apiUrl, { method: "POST", body: form });
+    let resp;
+    try {
+      resp = await fetchFn(apiUrl, { method: 'POST', body: form });
+    } catch (cause) {
+      // Network-level failure (no response at all — offline, DNS,
+      // timeout before headers). document transport sends in a single
+      // HTTP call — chunksSentBeforeFail is always 0 but we keep the
+      // same structured error shape as chunked-text.js so the UI's
+      // catch handler can display a unified toast.
+      const err = new Error(
+        'Error de red al enviar el documento a Telegram (no se recibió respuesta del servidor).'
+      );
+      err.name = 'TelegramNetworkError';
+      err.cause = cause;
+      err.httpStatus = null;
+      err.chunksSentBeforeFail = 0;
+      err.chunksTotal = 1;
+      err.partIndex = 1;
+      err.isPartialSend = false;
+      throw err;
+    }
 
-        if (!resp.ok) {
-            const detalle = await describeError(resp);
-            throw new Error(`Error al enviar el documento a Telegram${detalle}.`);
-        }
+    if (!resp.ok) {
+      const detalle = await describeError(resp);
+      const err = new Error(`Error al enviar el documento a Telegram${detalle}.`);
+      err.name = 'TelegramApiError';
+      err.httpStatus = resp.status;
+      err.chunksSentBeforeFail = 0;
+      err.chunksTotal = 1;
+      err.partIndex = 1;
+      err.isPartialSend = false;
+      throw err;
+    }
 
-        // deepLinkCapable is true here even though this strategy carries no
-        // ?c= — the receiver still reaches plaintext without manual
-        // copy/paste, just via a file tap instead of a pre-loaded URL.
-        return { deepLinkCapable: true, partsSent: 1 };
-    },
+    // deepLinkCapable is true here even though this strategy carries no
+    // ?c= — the receiver still reaches plaintext without manual
+    // copy/paste, just via a file tap instead of a pre-loaded URL.
+    return { deepLinkCapable: true, partsSent: 1 };
+  },
 };

@@ -28,8 +28,12 @@ Una vez que `app.js` está dividido y `sendDocument` está implementado, agregar
 ### 8. Fase 10.3 — Cifrado de imágenes
 Completa el modelo de seguridad para mensajes con imágenes. Después de 10.2, no antes.
 
-### 9. Fase 9.3 — CI: APK generado automáticamente en cada release
-Automatizar la generación del APK en GitHub Actions una vez que el flujo de contenido esté estable. No automatizar antes: bake un pipeline de CI alrededor de una keystore quemada es inútil.
+### 9. Fase 9.3 — CI: APK generado automáticamente en cada release 🟡 Scaffolding listo, Gradle build final en usuario-local
+Automatización: `build-twa-apk.yml` (Actions) + scripts `apk/` + NEXTPASOS_APK.md. El workflow está completo y parsea sin errores (M-3 fixed: YAML syntax, prompts JDK/SDK/keystore auto-respondidos, gradlew auto-generado si falta, M-2 smoke-test strings.xml anti-stubs). Lo que falta es la primera ejecución end-to-end en una máquina con ~5 GB libres para el Android SDK + Gradle daemon (el sandbox de aquí no alcanzó el espacio), y pushear los secrets `ANDROID_KEYSTORE_B64` + `ANDROID_KEYSTORE_PASSWORD` al repo. Build local manual sí funciona con `scripts/apk/build-apk.sh`.
+
+### 10. C-1 / C-2 — Edge cases Chunking ✅ Corregidos
+- **C-1:** Token único oversized — `chunkCipherText()` ahora byte-splittea tokens > budget o lanza `TokenOverflowError` descriptivo en vez de producir un chunk que Telegram rechaza con 400 silencioso.
+- **C-2:** Recuperación parcial de envío — `chunkedTextTransport` y `documentTransport` adjuntan `chunksSentBeforeFail`, `chunksTotal`, `isPartialSend`, `httpStatus` a todos los throws; el UI handler puede avisar "Partes 1 a 3 ya fueron enviadas, falló en 4/5" en vez de un error genérico.
 
 ### Lo que NO se hace (y por qué)
 **Transporte propio (app-to-app sin Telegram):** requiere un servidor propio o WebRTC P2P — rompe el costo $0, agrega infraestructura que hay que mantener, y resuelve un problema que no existe. El envío actual ya es silencioso (no abre Telegram). El único punto de fricción real es el botón "Descifrar →" que abre Chrome en lugar del APK, resuelto en el paso 3.
@@ -221,23 +225,28 @@ Ventajas para este proyecto:
 - [x] Colores de splash/theme (`#1a110f`) sincronizados con la PWA.
 - [x] `versionCode: 1` / `versionName: "1.0.0"` en `twa-manifest.json`.
 
-#### Fase 9.3 — CI: APK generado automáticamente en cada release ❌ No implementado
-- [x] `.github/workflows/build-twa-apk.yml` existe — el workflow está definido.
-- [ ] Verificar que el workflow funciona end-to-end en GitHub Actions (la keystore debe estar disponible como secret en el repo, o el workflow usa sideload manual).
-- [ ] Subir el APK como release asset a GitHub Releases en cada tag — así el cliente siempre descarga la última versión desde una URL fija sin necesidad de reenviar el archivo manualmente.
+#### Fase 9.3 — CI: APK generado automáticamente en cada release 🟡 Scaffolding listo
+- [x] `.github/workflows/build-twa-apk.yml` workflow definido (checkout → JDK 17 → Node 20 → Bubblewrap con `--ignore-scripts` → Android SDK 11076708 → restore keystore desde B64 → `bubblewrap init` minimal si no hay twa-manifest.json → `bubblewrap build` con bypass de todos los prompts interactivos → descubrir outputs → smoke test M-2 strings.xml reales → upload artifact 30 días → resolver release tag → GitHub Release assets → `always()` wipe keystore+pass).
+- [x] M-3 YAML syntax error fixed — expresion GitHub `&& || ` inline inválida eliminada, KEY_PASSWORD fallback movido a bash dentro de `run:`.
+- [x] M-3 gradlew auto-generate — step detecta si falta `./gradlew` (proyecto Android no versionado) y corre `bubblewrap init` auto-respondido antes de `bubblewrap build`.
+- [x] M-2 strings/colors stubs added to tango-cifrado-apk/.gitignore con 16 líneas explicando el riesgo.
+- [x] M-2 CI guard — step `Smoke-test APK strings` usa `aapt2 dump` para aseverar `hostName`/`launchUrl`/`colorPrimary` presentes y no vacíos en cada APK generado.
+- [ ] Correr el workflow end-to-end en GitHub Actions (requiere secrets `ANDROID_KEYSTORE_B64` + `ANDROID_KEYSTORE_PASSWORD` en Settings → Secrets). Máquina runner de Actions tiene suficiente disco; el sandbox de este repo no llegó al espacio para descargar 5 GB de SDK.
+- [x] Subir el APK como release asset a GitHub Releases en cada tag `apk/v*` — step `softprops/action-gh-release@v2` con `files: dist/apk/*.{apk,aab}` + `fail_on_unmatched_files: true`.
 
-### Consideraciones
+## Fase 10.1 — Chunking edge cases ✅ Corregidos
 
-- **`assetlinks.json`** es el paso más crítico y el más fácil de olvidar. Sin él la TWA muestra la URL en la barra — el receptor ve que es una web, no una app. Requiere el SHA-256 del certificado de firma del APK.
-- **Sideload en Android:** el receptor debe habilitar "Instalar apps de fuentes desconocidas" en Ajustes → Seguridad (o en Ajustes de la app desde donde abre el APK, dependiendo de la versión de Android). Es un paso de un solo click pero hay que instruirlo.
-- **iOS:** TWA es exclusiva de Android. Para iOS la única opción nativa sin App Store es la instalación PWA desde Safari (Compartir → Agregar a pantalla de inicio), que es más visible en Safari que en Chrome móvil. No hay equivalente a sideload en iOS.
-- **Updates:** como la TWA apunta a la URL de GitHub Pages, cualquier cambio en la PWA llega automáticamente sin resubir el APK. Solo hay que subir un APK nuevo cuando cambia el wrapper Android (nombre, ícono, permisos, versión mínima de Android).
+Los 2 casos borde documentados en TO_FIX.md ya no producen un error silencioso:
 
-## Fase 10: Mensajes Largos e Imágenes ❌ No implementado
-
-### Objetivo
-
-Permitir enviar artículos completos (texto largo) e imágenes por Telegram desde la PWA. Las imágenes viajan sin cifrar en esta primera iteración — la prioridad es que lleguen. El texto sigue cifrado como siempre.
+- **C-1** — `chunkCipherText()` overflow guard: un solo token (ej: XOR fallback de un número de 200+ dígitos) más grande que `effectiveMax` ya no genera un chunk >4096 chars. Ahora se byte-splittea en múltiples chunks sintéticos (cada uno ajustado al prefix proyectado), o tira `TokenOverflowError` con mensaje descriptivo + props `tokenLength`, `maxLen`, `budget`, `chunkIndex` para que el UI muestre ayuda concreta.
+- **C-2** — `chunked-text.js` y `document.js` estructuran sus throws con el mismo shape:
+  - `name ∈ {TelegramNetworkError, TelegramApiError}`
+  - `cause` (si fue excepción de red)
+  - `httpStatus` (número o null)
+  - `chunksSentBeforeFail` (0-based, 0 para document transport)
+  - `chunksTotal`, `partIndex` (1-indexed para copy UI)
+  - `isPartialSend` (boolean — `chunksSentBeforeFail > 0`)
+  - Mensajes de error humanos: `"Error en parte 4/5 (partes 1 a 3 ya fueron enviados) (telegram: Bad Request: message is too long)."`
 
 ### Fase 10.1 — Mensajes de texto largos (chunking automático) ✅ Implementado
 

@@ -13,9 +13,9 @@
  * module exists to prevent.
  */
 
-import { chunkedTextTransport, buildDeepLink } from "./chunked-text.js";
-import { documentTransport } from "./document.js";
-import { TELEGRAM_BUTTON_URL_MAX } from "./types.js";
+import { chunkedTextTransport, buildDeepLink } from './chunked-text.js';
+import { documentTransport } from './document.js';
+import { TELEGRAM_BUTTON_URL_MAX } from './types.js';
 
 /**
  * Decision rule (ROADMAP.md Fase 10.1.1): use chunked-text when its deep
@@ -31,10 +31,8 @@ import { TELEGRAM_BUTTON_URL_MAX } from "./types.js";
  * @returns {import("./types.js").Transport}
  */
 export function selectTransport(ciphertext, ctx) {
-    const deepLink = buildDeepLink(ctx.origin, ctx.pathname, ctx.search, ciphertext);
-    return deepLink.length <= TELEGRAM_BUTTON_URL_MAX
-        ? chunkedTextTransport
-        : documentTransport;
+  const deepLink = buildDeepLink(ctx.origin, ctx.pathname, ctx.search, ciphertext);
+  return deepLink.length <= TELEGRAM_BUTTON_URL_MAX ? chunkedTextTransport : documentTransport;
 }
 
 /**
@@ -46,6 +44,6 @@ export function selectTransport(ciphertext, ctx) {
  * @returns {Promise<import("./types.js").SendResult>}
  */
 export async function sendCiphertext(ciphertext, ctx) {
-    const transport = selectTransport(ciphertext, ctx);
-    return transport.send(ciphertext, ctx);
+  const transport = selectTransport(ciphertext, ctx);
+  return transport.send(ciphertext, ctx);
 }

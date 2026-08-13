@@ -42,10 +42,10 @@
  */
 
 const KDF_ITERATIONS_DEPLOY_DEFAULT = 600_000; // must match the CI script; bundle also carries its own value
-const KDF_ITERATIONS_PIN = 600_000;            // PINs are low-entropy (short, numeric) -- keep this high
+const KDF_ITERATIONS_PIN = 600_000; // PINs are low-entropy (short, numeric) -- keep this high
 const PIN_SALT_LEN = 16;
 const NONCE_LEN = 12;
-const DEVICE_VAULT_AAD = new TextEncoder().encode("tango-cifrado-device-vault-v1");
+const DEVICE_VAULT_AAD = new TextEncoder().encode('tango-cifrado-device-vault-v1');
 
 // Bundle format versions this client knows how to unlock. Bump
 // build_encrypted_bundle.py's "version" field only when the payload shape
@@ -57,31 +57,31 @@ const SUPPORTED_BUNDLE_VERSIONS = [1];
 // ---------- helpers ----------
 
 function b64ToBytes(b64) {
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return bytes;
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
 }
 
 function bytesToB64(bytes) {
-    let bin = '';
-    for (const b of bytes) bin += String.fromCharCode(b);
-    return btoa(bin);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
 }
 
 async function deriveAesKey(passphrase, saltBytes, iterations) {
-    const passNormalized = passphrase.normalize('NFKC');
-    const passBytes = new TextEncoder().encode(passNormalized);
-    const keyMaterial = await crypto.subtle.importKey(
-        'raw', passBytes, { name: 'PBKDF2' }, false, ['deriveKey']
-    );
-    return crypto.subtle.deriveKey(
-        { name: 'PBKDF2', salt: saltBytes, iterations, hash: 'SHA-256' },
-        keyMaterial,
-        { name: 'AES-GCM', length: 256 },
-        false,
-        ['encrypt', 'decrypt']
-    );
+  const passNormalized = passphrase.normalize('NFKC');
+  const passBytes = new TextEncoder().encode(passNormalized);
+  const keyMaterial = await crypto.subtle.importKey('raw', passBytes, { name: 'PBKDF2' }, false, [
+    'deriveKey',
+  ]);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: saltBytes, iterations, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
 }
 
 // ---------- Layer 1: deploy bundle (first run only) ----------
@@ -96,38 +96,42 @@ async function deriveAesKey(passphrase, saltBytes, iterations) {
  * @returns {Promise<{tangos: object, salt: number}>}
  */
 export async function unlockDeployBundle(claveDespliegue, bundle) {
-    if (!SUPPORTED_BUNDLE_VERSIONS.includes(bundle.version)) {
-        throw new Error(
-            `Versión de bundle no soportada: ${bundle.version}. ` +
-            `Esta versión de la app solo entiende: ${SUPPORTED_BUNDLE_VERSIONS.join(', ')}. ` +
-            `Actualizá la PWA a la última versión.`
-        );
-    }
-    if (bundle.kdf !== 'PBKDF2-HMAC-SHA256') {
-        throw new Error(`KDF no soportado: ${bundle.kdf}`);
-    }
-    const kdfSalt = b64ToBytes(bundle.kdf_salt_b64);
-    const nonce = b64ToBytes(bundle.nonce_b64);
-    const ciphertext = b64ToBytes(bundle.ciphertext_b64);
-    const aad = new TextEncoder().encode(bundle.aad);
+  if (!SUPPORTED_BUNDLE_VERSIONS.includes(bundle.version)) {
+    throw new Error(
+      `Versión de bundle no soportada: ${bundle.version}. ` +
+        `Esta versión de la app solo entiende: ${SUPPORTED_BUNDLE_VERSIONS.join(', ')}. ` +
+        `Actualizá la PWA a la última versión.`
+    );
+  }
+  if (bundle.kdf !== 'PBKDF2-HMAC-SHA256') {
+    throw new Error(`KDF no soportado: ${bundle.kdf}`);
+  }
+  const kdfSalt = b64ToBytes(bundle.kdf_salt_b64);
+  const nonce = b64ToBytes(bundle.nonce_b64);
+  const ciphertext = b64ToBytes(bundle.ciphertext_b64);
+  const aad = new TextEncoder().encode(bundle.aad);
 
-    const key = await deriveAesKey(claveDespliegue, kdfSalt, bundle.kdf_iterations || KDF_ITERATIONS_DEPLOY_DEFAULT);
+  const key = await deriveAesKey(
+    claveDespliegue,
+    kdfSalt,
+    bundle.kdf_iterations || KDF_ITERATIONS_DEPLOY_DEFAULT
+  );
 
-    let plaintextBuf;
-    try {
-        plaintextBuf = await crypto.subtle.decrypt(
-            { name: 'AES-GCM', iv: nonce, additionalData: aad },
-            key,
-            ciphertext
-        );
-    } catch (err) {
-        // SubtleCrypto throws a generic OperationError on tag mismatch --
-        // deliberately don't leak whether it was the password or corruption.
-        throw new Error('Clave de despliegue incorrecta, o el paquete está corrompido.');
-    }
+  let plaintextBuf;
+  try {
+    plaintextBuf = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: nonce, additionalData: aad },
+      key,
+      ciphertext
+    );
+  } catch (err) {
+    // SubtleCrypto throws a generic OperationError on tag mismatch --
+    // deliberately don't leak whether it was the password or corruption.
+    throw new Error('Clave de despliegue incorrecta, o el paquete está corrompido.');
+  }
 
-    const payload = JSON.parse(new TextDecoder().decode(plaintextBuf));
-    return payload; // { tangos, salt }
+  const payload = JSON.parse(new TextDecoder().decode(plaintextBuf));
+  return payload; // { tangos, salt }
 }
 
 // ---------- Layer 2: device vault (day to day, PIN-gated) ----------
@@ -141,24 +145,24 @@ export async function unlockDeployBundle(claveDespliegue, bundle) {
  * @returns {Promise<object>} sealed vault record
  */
 export async function sealForDevice(pin, payload) {
-    const pinSalt = crypto.getRandomValues(new Uint8Array(PIN_SALT_LEN));
-    const nonce = crypto.getRandomValues(new Uint8Array(NONCE_LEN));
-    const key = await deriveAesKey(pin, pinSalt, KDF_ITERATIONS_PIN);
+  const pinSalt = crypto.getRandomValues(new Uint8Array(PIN_SALT_LEN));
+  const nonce = crypto.getRandomValues(new Uint8Array(NONCE_LEN));
+  const key = await deriveAesKey(pin, pinSalt, KDF_ITERATIONS_PIN);
 
-    const plaintext = new TextEncoder().encode(JSON.stringify(payload));
-    const ciphertextBuf = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv: nonce, additionalData: DEVICE_VAULT_AAD },
-        key,
-        plaintext
-    );
+  const plaintext = new TextEncoder().encode(JSON.stringify(payload));
+  const ciphertextBuf = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: nonce, additionalData: DEVICE_VAULT_AAD },
+    key,
+    plaintext
+  );
 
-    return {
-        version: 1,
-        kdf_iterations: KDF_ITERATIONS_PIN,
-        pin_salt_b64: bytesToB64(pinSalt),
-        nonce_b64: bytesToB64(nonce),
-        ciphertext_b64: bytesToB64(new Uint8Array(ciphertextBuf)),
-    };
+  return {
+    version: 1,
+    kdf_iterations: KDF_ITERATIONS_PIN,
+    pin_salt_b64: bytesToB64(pinSalt),
+    nonce_b64: bytesToB64(nonce),
+    ciphertext_b64: bytesToB64(new Uint8Array(ciphertextBuf)),
+  };
 }
 
 /**
@@ -169,24 +173,24 @@ export async function sealForDevice(pin, payload) {
  * @returns {Promise<{tangos: object, salt: number}>}
  */
 export async function openDeviceVault(pin, sealed) {
-    const pinSalt = b64ToBytes(sealed.pin_salt_b64);
-    const nonce = b64ToBytes(sealed.nonce_b64);
-    const ciphertext = b64ToBytes(sealed.ciphertext_b64);
+  const pinSalt = b64ToBytes(sealed.pin_salt_b64);
+  const nonce = b64ToBytes(sealed.nonce_b64);
+  const ciphertext = b64ToBytes(sealed.ciphertext_b64);
 
-    const key = await deriveAesKey(pin, pinSalt, sealed.kdf_iterations);
+  const key = await deriveAesKey(pin, pinSalt, sealed.kdf_iterations);
 
-    let plaintextBuf;
-    try {
-        plaintextBuf = await crypto.subtle.decrypt(
-            { name: 'AES-GCM', iv: nonce, additionalData: DEVICE_VAULT_AAD },
-            key,
-            ciphertext
-        );
-    } catch (err) {
-        throw new Error('PIN incorrecto.');
-    }
+  let plaintextBuf;
+  try {
+    plaintextBuf = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: nonce, additionalData: DEVICE_VAULT_AAD },
+      key,
+      ciphertext
+    );
+  } catch (err) {
+    throw new Error('PIN incorrecto.');
+  }
 
-    return JSON.parse(new TextDecoder().decode(plaintextBuf));
+  return JSON.parse(new TextDecoder().decode(plaintextBuf));
 }
 
 // ---------- IndexedDB persistence (thin wrapper) ----------
@@ -196,38 +200,38 @@ const STORE_NAME = 'vault';
 const RECORD_KEY = 'sealed-bundle';
 
 function openDb() {
-    return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, 1);
-        req.onupgradeneeded = () => {
-            req.result.createObjectStore(STORE_NAME);
-        };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(STORE_NAME);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
 }
 
 export async function saveSealedVault(sealed) {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        tx.objectStore(STORE_NAME).put(sealed, RECORD_KEY);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(sealed, RECORD_KEY);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 export async function loadSealedVault() {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const req = tx.objectStore(STORE_NAME).get(RECORD_KEY);
-        req.onsuccess = () => resolve(req.result || null);
-        req.onerror = () => reject(req.error);
-    });
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get(RECORD_KEY);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
 }
 
 export async function hasSealedVault() {
-    return (await loadSealedVault()) !== null;
+  return (await loadSealedVault()) !== null;
 }
 
 /**
@@ -236,13 +240,13 @@ export async function hasSealedVault() {
  * the sealed leftovers don't linger in IndexedDB alongside the new plain copy.
  */
 export async function deleteSealedVault() {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        tx.objectStore(STORE_NAME).delete(RECORD_KEY);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(RECORD_KEY);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 // ---------- Frictionless flow (no daily PIN) ----------
@@ -264,27 +268,27 @@ export async function deleteSealedVault() {
 const PAYLOAD_KEY = 'payload';
 
 export async function savePayloadDirect(payload) {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        tx.objectStore(STORE_NAME).put(JSON.stringify(payload), PAYLOAD_KEY);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(JSON.stringify(payload), PAYLOAD_KEY);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 export async function loadPayloadDirect() {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const req = tx.objectStore(STORE_NAME).get(PAYLOAD_KEY);
-        req.onsuccess = () => resolve(req.result ? JSON.parse(req.result) : null);
-        req.onerror = () => reject(req.error);
-    });
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get(PAYLOAD_KEY);
+    req.onsuccess = () => resolve(req.result ? JSON.parse(req.result) : null);
+    req.onerror = () => reject(req.error);
+  });
 }
 
 export async function hasPayloadDirect() {
-    return (await loadPayloadDirect()) !== null;
+  return (await loadPayloadDirect()) !== null;
 }
 
 /**
@@ -293,11 +297,11 @@ export async function hasPayloadDirect() {
  * doesn't keep sitting in IndexedDB next to the new sealed record.
  */
 export async function deletePayloadDirect() {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        tx.objectStore(STORE_NAME).delete(PAYLOAD_KEY);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(PAYLOAD_KEY);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }

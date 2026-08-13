@@ -17,10 +17,10 @@
 
 /** @type {import("./types.js").Transport} */
 export const serverBridgeTransport = {
-    async send(_ciphertext, _ctx) {
-        throw new Error(
-            "server-bridge transport is not implemented. " +
-            "See ROADMAP.md 'Fase 11' (or wherever this gets scheduled) for the design discussion."
-        );
-    },
+  async send(_ciphertext, _ctx) {
+    throw new Error(
+      'server-bridge transport is not implemented. ' +
+        "See ROADMAP.md 'Fase 11' (or wherever this gets scheduled) for the design discussion."
+    );
+  },
 };

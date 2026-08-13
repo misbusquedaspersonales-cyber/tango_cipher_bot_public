@@ -34,33 +34,33 @@
  *     impersonating the user.
  */
 
-import { cifrarMensaje, descifrarMensaje } from "./cipherEngine.js";
-import { sendCiphertext } from "./core/transport/index.js";
-import { resolveIncoming } from "./core/receive/index.js";
+import { cifrarMensaje, descifrarMensaje } from './cipherEngine.js';
+import { sendCiphertext } from './core/transport/index.js';
+import { resolveIncoming } from './core/receive/index.js';
 import {
-    unlockDeployBundle,
-    savePayloadDirect,
-    loadPayloadDirect,
-    hasPayloadDirect,
-    deletePayloadDirect,
-    sealForDevice,
-    openDeviceVault,
-    saveSealedVault,
-    loadSealedVault,
-    hasSealedVault,
-    deleteSealedVault,
-} from "./secure-vault.js";
+  unlockDeployBundle,
+  savePayloadDirect,
+  loadPayloadDirect,
+  hasPayloadDirect,
+  deletePayloadDirect,
+  sealForDevice,
+  openDeviceVault,
+  saveSealedVault,
+  loadSealedVault,
+  hasSealedVault,
+  deleteSealedVault,
+} from './secure-vault.js';
 
-const TELEGRAM_CONFIG_KEY = "tango-cifrado:telegram-config";
-const VAULT_MODE_KEY = "tango-cifrado:vault-mode"; // 'direct' | 'pin'
-const BUNDLE_URL = "./encrypted-bundle.json";
+const TELEGRAM_CONFIG_KEY = 'tango-cifrado:telegram-config';
+const VAULT_MODE_KEY = 'tango-cifrado:vault-mode'; // 'direct' | 'pin'
+const BUNDLE_URL = './encrypted-bundle.json';
 
 // ---------- state ----------
 
 let payload = null; // { tangos, salt } in direct mode; { tangos, salt, telegram } in pin mode
-let mode = "cifrar"; // 'cifrar' | 'descifrar'
+let mode = 'cifrar'; // 'cifrar' | 'descifrar'
 let bundleGeneratedAt = null; // ISO string from the fetched bundle's plaintext metadata, or null
-let vaultMode = "direct"; // 'direct' | 'pin' -- resolved from localStorage at boot
+let vaultMode = 'direct'; // 'direct' | 'pin' -- resolved from localStorage at boot
 let sessionPin = null; // the PIN used to open the device vault this session, kept in
 // memory only (never persisted) so Settings can re-seal the vault after an
 // edit (e.g. saving new Telegram credentials) without prompting for the PIN
@@ -68,40 +68,40 @@ let sessionPin = null; // the PIN used to open the device vault this session, ke
 
 // ---------- small DOM helpers ----------
 
-const $ = (sel) => document.querySelector(sel);
+const $ = sel => document.querySelector(sel);
 
 function showScreen(name) {
-    $("#unlock-screen").hidden = name !== "unlock";
-    $("#pin-unlock-screen").hidden = name !== "pin-unlock";
-    $("#app-screen").hidden = name !== "app";
+  $('#unlock-screen').hidden = name !== 'unlock';
+  $('#pin-unlock-screen').hidden = name !== 'pin-unlock';
+  $('#app-screen').hidden = name !== 'app';
 }
 
-function setStatus(el, message, kind = "info") {
-    el.textContent = message;
-    el.dataset.kind = message ? kind : "";
+function setStatus(el, message, kind = 'info') {
+  el.textContent = message;
+  el.dataset.kind = message ? kind : '';
 }
 
 function iterTangos(tangos) {
-    // Mirrors iter_tangos() in cipher_engine.py: skip metadata keys like
-    // '_nota' and anything that isn't a real tango record.
-    return Object.entries(tangos).filter(
-        ([clave, valor]) => !clave.startsWith("_") && typeof valor === "object" && valor !== null
-    );
+  // Mirrors iter_tangos() in cipher_engine.py: skip metadata keys like
+  // '_nota' and anything that isn't a real tango record.
+  return Object.entries(tangos).filter(
+    ([clave, valor]) => !clave.startsWith('_') && typeof valor === 'object' && valor !== null
+  );
 }
 
 // ---------- Telegram config (storage location depends on vaultMode) ----------
 
 function loadTelegramConfigFromLocalStorage() {
-    try {
-        const raw = localStorage.getItem(TELEGRAM_CONFIG_KEY);
-        return raw ? JSON.parse(raw) : { botToken: "", chatId: "" };
-    } catch {
-        return { botToken: "", chatId: "" };
-    }
+  try {
+    const raw = localStorage.getItem(TELEGRAM_CONFIG_KEY);
+    return raw ? JSON.parse(raw) : { botToken: '', chatId: '' };
+  } catch {
+    return { botToken: '', chatId: '' };
+  }
 }
 
 function saveTelegramConfigToLocalStorage(config) {
-    localStorage.setItem(TELEGRAM_CONFIG_KEY, JSON.stringify(config));
+  localStorage.setItem(TELEGRAM_CONFIG_KEY, JSON.stringify(config));
 }
 
 /**
@@ -112,10 +112,10 @@ function saveTelegramConfigToLocalStorage(config) {
  * any screen that needs this has been reached.
  */
 function getTelegramConfig() {
-    if (vaultMode === "pin") {
-        return (payload && payload.telegram) || { botToken: "", chatId: "" };
-    }
-    return loadTelegramConfigFromLocalStorage();
+  if (vaultMode === 'pin') {
+    return (payload && payload.telegram) || { botToken: '', chatId: '' };
+  }
+  return loadTelegramConfigFromLocalStorage();
 }
 
 /**
@@ -125,267 +125,278 @@ function getTelegramConfig() {
  * re-encrypting the payload it's part of.
  */
 async function setTelegramConfig(config) {
-    if (vaultMode === "pin") {
-        if (!sessionPin || !payload) {
-            throw new Error("La bóveda no está abierta -- no se puede guardar.");
-        }
-        payload.telegram = config;
-        const sealed = await sealForDevice(sessionPin, payload);
-        await saveSealedVault(sealed);
-    } else {
-        saveTelegramConfigToLocalStorage(config);
+  if (vaultMode === 'pin') {
+    if (!sessionPin || !payload) {
+      throw new Error('La bóveda no está abierta -- no se puede guardar.');
     }
+    payload.telegram = config;
+    const sealed = await sealForDevice(sessionPin, payload);
+    await saveSealedVault(sealed);
+  } else {
+    saveTelegramConfigToLocalStorage(config);
+  }
 }
 
 // ---------- vault mode (direct vs PIN-gated) ----------
 
 function getVaultMode() {
-    return localStorage.getItem(VAULT_MODE_KEY) === "pin" ? "pin" : "direct";
+  return localStorage.getItem(VAULT_MODE_KEY) === 'pin' ? 'pin' : 'direct';
 }
 
 function setVaultMode(newMode) {
-    localStorage.setItem(VAULT_MODE_KEY, newMode);
-    vaultMode = newMode;
+  localStorage.setItem(VAULT_MODE_KEY, newMode);
+  vaultMode = newMode;
 }
 
 // ---------- first-run unlock ----------
 
 async function handleUnlockSubmit(event) {
-    event.preventDefault();
-    const claveInput = $("#clave-despliegue");
-    const statusEl = $("#unlock-status");
-    const button = $("#unlock-submit");
+  event.preventDefault();
+  const claveInput = $('#clave-despliegue');
+  const statusEl = $('#unlock-status');
+  const button = $('#unlock-submit');
 
-    const claveDespliegue = claveInput.value.trim();
-    if (!claveDespliegue) {
-        setStatus(statusEl, "Ingresá la clave de despliegue.", "error");
-        return;
+  const claveDespliegue = claveInput.value.trim();
+  if (!claveDespliegue) {
+    setStatus(statusEl, 'Ingresá la clave de despliegue.', 'error');
+    return;
+  }
+
+  button.disabled = true;
+  setStatus(statusEl, 'Descargando paquete cifrado…', 'info');
+
+  try {
+    const resp = await fetch(BUNDLE_URL, { cache: 'no-cache' });
+    if (!resp.ok) {
+      if (resp.headers.get('X-Tango-Offline') === '1') {
+        throw new Error(
+          'Sin conexión y no hay una copia guardada del paquete cifrado. ' +
+            'Conectate a internet y probá de nuevo.'
+        );
+      }
+      throw new Error(`No se pudo descargar ${BUNDLE_URL} (${resp.status})`);
+    }
+    const bundle = await resp.json();
+
+    setStatus(statusEl, 'Descifrando…', 'info');
+    payload = await unlockDeployBundle(claveDespliegue, bundle);
+
+    if (bundle.generated_at) {
+      bundleGeneratedAt = bundle.generated_at;
+      localStorage.setItem(BUNDLE_GENERATED_AT_KEY, bundle.generated_at);
+      showBundleGeneratedAt(bundle.generated_at);
     }
 
-    button.disabled = true;
-    setStatus(statusEl, "Descargando paquete cifrado…", "info");
+    // Store generated_at inside the payload so the corpus-freshness
+    // check in init() can detect when a newer bundle has been deployed.
+    payload.bundle_generated_at = bundle.generated_at || null;
 
-    try {
-        const resp = await fetch(BUNDLE_URL, { cache: "no-cache" });
-        if (!resp.ok) {
-            if (resp.headers.get("X-Tango-Offline") === "1") {
-                throw new Error(
-                    "Sin conexión y no hay una copia guardada del paquete cifrado. " +
-                    "Conectate a internet y probá de nuevo."
-                );
-            }
-            throw new Error(`No se pudo descargar ${BUNDLE_URL} (${resp.status})`);
-        }
-        const bundle = await resp.json();
+    setVaultMode('direct');
+    await savePayloadDirect(payload);
+    claveInput.value = '';
 
-        setStatus(statusEl, "Descifrando…", "info");
-        payload = await unlockDeployBundle(claveDespliegue, bundle);
-
-        if (bundle.generated_at) {
-            bundleGeneratedAt = bundle.generated_at;
-            localStorage.setItem(BUNDLE_GENERATED_AT_KEY, bundle.generated_at);
-            showBundleGeneratedAt(bundle.generated_at);
-        }
-
-        // Store generated_at inside the payload so the corpus-freshness
-        // check in init() can detect when a newer bundle has been deployed.
-        payload.bundle_generated_at = bundle.generated_at || null;
-
-        setVaultMode("direct");
-        await savePayloadDirect(payload);
-        claveInput.value = "";
-
-        setStatus(statusEl, "", "info");
-        enterComposer();
-    } catch (err) {
-        setStatus(statusEl, err.message || "No se pudo desbloquear el paquete.", "error");
-    } finally {
-        button.disabled = false;
-    }
+    setStatus(statusEl, '', 'info');
+    enterComposer();
+  } catch (err) {
+    setStatus(statusEl, err.message || 'No se pudo desbloquear el paquete.', 'error');
+  } finally {
+    button.disabled = false;
+  }
 }
 
 // ---------- PIN unlock (device vault, opt-in) ----------
 
 async function handlePinUnlockSubmit(event) {
-    event.preventDefault();
-    const pinInput = $("#device-pin");
-    const statusEl = $("#pin-unlock-status");
-    const button = $("#pin-unlock-submit");
+  event.preventDefault();
+  const pinInput = $('#device-pin');
+  const statusEl = $('#pin-unlock-status');
+  const button = $('#pin-unlock-submit');
 
-    const pin = pinInput.value;
-    if (!pin) {
-        setStatus(statusEl, "Ingresá tu PIN.", "error");
-        return;
+  const pin = pinInput.value;
+  if (!pin) {
+    setStatus(statusEl, 'Ingresá tu PIN.', 'error');
+    return;
+  }
+
+  button.disabled = true;
+  setStatus(statusEl, 'Verificando…', 'info');
+
+  try {
+    const sealed = await loadSealedVault();
+    if (!sealed) {
+      // Shouldn't normally happen (init() only shows this screen when
+      // hasSealedVault() was true), but IndexedDB can be cleared out
+      // from under the app -- fail with a clear message instead of a
+      // confusing decrypt error.
+      throw new Error('No se encontró la bóveda protegida en este dispositivo.');
     }
+    const opened = await openDeviceVault(pin, sealed);
+    payload = opened; // { tangos, salt, telegram }
+    sessionPin = pin;
+    pinInput.value = '';
 
-    button.disabled = true;
-    setStatus(statusEl, "Verificando…", "info");
-
-    try {
-        const sealed = await loadSealedVault();
-        if (!sealed) {
-            // Shouldn't normally happen (init() only shows this screen when
-            // hasSealedVault() was true), but IndexedDB can be cleared out
-            // from under the app -- fail with a clear message instead of a
-            // confusing decrypt error.
-            throw new Error("No se encontró la bóveda protegida en este dispositivo.");
-        }
-        const opened = await openDeviceVault(pin, sealed);
-        payload = opened; // { tangos, salt, telegram }
-        sessionPin = pin;
-        pinInput.value = "";
-
-        setStatus(statusEl, "", "info");
-        enterComposer();
-    } catch (err) {
-        setStatus(statusEl, err.message || "PIN incorrecto.", "error");
-    } finally {
-        button.disabled = false;
-    }
+    setStatus(statusEl, '', 'info');
+    enterComposer();
+  } catch (err) {
+    setStatus(statusEl, err.message || 'PIN incorrecto.', 'error');
+  } finally {
+    button.disabled = false;
+  }
 }
 
 // ---------- composer ----------
 
 function populateTangoSelect() {
-    const select = $("#tango-select");
-    select.innerHTML = "";
-    for (const [id, tango] of iterTangos(payload.tangos)) {
-        const opt = document.createElement("option");
-        opt.value = id;
-        opt.textContent = `${id} — ${tango.titulo}`;
-        select.appendChild(opt);
-    }
+  const select = $('#tango-select');
+  select.innerHTML = '';
+  for (const [id, tango] of iterTangos(payload.tangos)) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = `${id} — ${tango.titulo}`;
+    select.appendChild(opt);
+  }
 }
 
 function renderCoordinateStrip(codigoCifrado) {
-    const strip = $("#output-strip");
-    strip.innerHTML = "";
-    const partes = codigoCifrado.split("-");
-    partes.forEach((token, i) => {
-        const chip = document.createElement("span");
-        chip.className = "chip" + (i === 0 ? " chip--key" : "");
-        chip.textContent = token || "·";
-        strip.appendChild(chip);
-    });
+  const strip = $('#output-strip');
+  strip.innerHTML = '';
+  const partes = codigoCifrado.split('-');
+  partes.forEach((token, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip' + (i === 0 ? ' chip--key' : '');
+    chip.textContent = token || '·';
+    strip.appendChild(chip);
+  });
 }
 
 function renderPlainOutput(text) {
-    const strip = $("#output-strip");
-    strip.innerHTML = "";
-    const p = document.createElement("p");
-    p.className = "plain-output";
-    p.textContent = text;
-    strip.appendChild(p);
+  const strip = $('#output-strip');
+  strip.innerHTML = '';
+  const p = document.createElement('p');
+  p.className = 'plain-output';
+  p.textContent = text;
+  strip.appendChild(p);
 }
 
 function setMode(newMode) {
-    mode = newMode;
-    $("#mode-cifrar").classList.toggle("is-active", mode === "cifrar");
-    $("#mode-descifrar").classList.toggle("is-active", mode === "descifrar");
-    $("#tango-field").hidden = mode !== "cifrar";
-    $("#open-file-row").hidden = mode !== "descifrar";
-    $("#message-input").placeholder =
-        mode === "cifrar" ? "Escribí el mensaje…" : "Pegá el código cifrado (ej: 50-V09P01-~20-…)";
-    $("#message-label").textContent = mode === "cifrar" ? "Mensaje" : "Código cifrado";
-    $("#run-action").textContent = mode === "cifrar" ? "Cifrar" : "Descifrar";
-    $("#message-input").value = "";
-    $("#output-strip").innerHTML = "";
-    $("#send-row").hidden = true;
-    $("#send-row").dataset.cipherText = "";
-    setStatus($("#composer-status"), "", "info");
+  mode = newMode;
+  $('#mode-cifrar').classList.toggle('is-active', mode === 'cifrar');
+  $('#mode-descifrar').classList.toggle('is-active', mode === 'descifrar');
+  $('#tango-field').hidden = mode !== 'cifrar';
+  $('#open-file-row').hidden = mode !== 'descifrar';
+  $('#message-input').placeholder =
+    mode === 'cifrar' ? 'Escribí el mensaje…' : 'Pegá el código cifrado (ej: 50-V09P01-~20-…)';
+  $('#message-label').textContent = mode === 'cifrar' ? 'Mensaje' : 'Código cifrado';
+  $('#run-action').textContent = mode === 'cifrar' ? 'Cifrar' : 'Descifrar';
+  $('#message-input').value = '';
+  $('#output-strip').innerHTML = '';
+  $('#send-row').hidden = true;
+  $('#send-row').dataset.cipherText = '';
+  setStatus($('#composer-status'), '', 'info');
 }
 
 async function handleRunAction() {
-    const input = $("#message-input").value;
-    const statusEl = $("#composer-status");
-    setStatus(statusEl, "", "info");
-    $("#send-row").hidden = true;
+  const input = $('#message-input').value;
+  const statusEl = $('#composer-status');
+  setStatus(statusEl, '', 'info');
+  $('#send-row').hidden = true;
 
-    if (!input.trim()) {
-        setStatus(statusEl, mode === "cifrar" ? "Escribí un mensaje." : "Pegá un código cifrado.", "error");
-        return;
-    }
+  if (!input.trim()) {
+    setStatus(
+      statusEl,
+      mode === 'cifrar' ? 'Escribí un mensaje.' : 'Pegá un código cifrado.',
+      'error'
+    );
+    return;
+  }
 
-    try {
-        if (mode === "cifrar") {
-            const idTango = $("#tango-select").value;
-            const codigo = await cifrarMensaje(idTango, input, payload.tangos, payload.salt);
-            renderCoordinateStrip(codigo);
-            $("#send-row").hidden = false;
-            $("#send-row").dataset.cipherText = codigo;
-        } else {
-            const texto = await descifrarMensaje(input, payload.tangos, payload.salt);
-            renderPlainOutput(texto);
-        }
-    } catch (err) {
-        setStatus(statusEl, err.message || "Ocurrió un error.", "error");
+  try {
+    if (mode === 'cifrar') {
+      const idTango = $('#tango-select').value;
+      const codigo = await cifrarMensaje(idTango, input, payload.tangos, payload.salt);
+      renderCoordinateStrip(codigo);
+      $('#send-row').hidden = false;
+      $('#send-row').dataset.cipherText = codigo;
+    } else {
+      const texto = await descifrarMensaje(input, payload.tangos, payload.salt);
+      renderPlainOutput(texto);
     }
+  } catch (err) {
+    setStatus(statusEl, err.message || 'Ocurrió un error.', 'error');
+  }
 }
 
 async function handleCopy() {
-    const strip = $("#output-strip");
-    const text = strip.dataset && $("#send-row").dataset.cipherText
-        ? $("#send-row").dataset.cipherText
-        : strip.textContent;
-    try {
-        await navigator.clipboard.writeText(text);
-        setStatus($("#composer-status"), "Copiado.", "success");
-    } catch {
-        setStatus($("#composer-status"), "No se pudo copiar automáticamente — seleccioná el texto manualmente.", "error");
-    }
+  const strip = $('#output-strip');
+  const text =
+    strip.dataset && $('#send-row').dataset.cipherText
+      ? $('#send-row').dataset.cipherText
+      : strip.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    setStatus($('#composer-status'), 'Copiado.', 'success');
+  } catch {
+    setStatus(
+      $('#composer-status'),
+      'No se pudo copiar automáticamente — seleccioná el texto manualmente.',
+      'error'
+    );
+  }
 }
 
 async function handleSend() {
-    const statusEl = $("#composer-status");
-    const { botToken, chatId } = getTelegramConfig();
+  const statusEl = $('#composer-status');
+  const { botToken, chatId } = getTelegramConfig();
 
-    if (!botToken || !chatId) {
-        setStatus(statusEl, "Configurá tu bot de Telegram en Ajustes antes de enviar.", "error");
-        $("#settings-panel").hidden = false;
-        return;
+  if (!botToken || !chatId) {
+    setStatus(statusEl, 'Configurá tu bot de Telegram en Ajustes antes de enviar.', 'error');
+    $('#settings-panel').hidden = false;
+    return;
+  }
+
+  const codigo = $('#send-row').dataset.cipherText;
+  const button = $('#send-button');
+  button.disabled = true;
+  setStatus(statusEl, 'Enviando a Telegram…', 'info');
+
+  try {
+    const result = await sendCiphertext(codigo, {
+      botToken,
+      chatId,
+      origin: location.origin,
+      pathname: location.pathname,
+      search: location.search,
+    });
+    // selectTransport() guarantees deepLinkCapable is always true:
+    // chunkedTextTransport sets it when the button URL fits ≤2048 bytes,
+    // and documentTransport always sets it (receiver taps the .txt file).
+    // If this ever fires, a new transport was added without honouring the
+    // invariant — catch it early.
+    if (!result.deepLinkCapable) {
+      console.warn(
+        '[app] sendCiphertext returned deepLinkCapable=false — transport invariant violated.'
+      );
     }
-
-    const codigo = $("#send-row").dataset.cipherText;
-    const button = $("#send-button");
-    button.disabled = true;
-    setStatus(statusEl, "Enviando a Telegram…", "info");
-
-    try {
-        const result = await sendCiphertext(codigo, {
-            botToken,
-            chatId,
-            origin: location.origin,
-            pathname: location.pathname,
-            search: location.search,
-        });
-        // selectTransport() guarantees deepLinkCapable is always true:
-        // chunkedTextTransport sets it when the button URL fits ≤2048 bytes,
-        // and documentTransport always sets it (receiver taps the .txt file).
-        // If this ever fires, a new transport was added without honouring the
-        // invariant — catch it early.
-        if (!result.deepLinkCapable) {
-            console.warn("[app] sendCiphertext returned deepLinkCapable=false — transport invariant violated.");
-        }
-        setStatus(statusEl, "Enviado.", "success");
-    } catch (err) {
-        setStatus(statusEl, err.message || "Error al enviar a Telegram.", "error");
-    } finally {
-        button.disabled = false;
-    }
+    setStatus(statusEl, 'Enviado.', 'success');
+  } catch (err) {
+    setStatus(statusEl, err.message || 'Error al enviar a Telegram.', 'error');
+  } finally {
+    button.disabled = false;
+  }
 }
 
 // ---------- settings ----------
 
-const BUNDLE_GENERATED_AT_KEY = "tango-cifrado:bundle-generated-at";
+const BUNDLE_GENERATED_AT_KEY = 'tango-cifrado:bundle-generated-at';
 
 function showBundleGeneratedAt(iso) {
-    const bundleInfo = $("#bundle-info");
-    if (!bundleInfo || !iso) return;
-    const fecha = new Date(iso);
-    const texto = Number.isNaN(fecha.getTime())
-        ? iso
-        : fecha.toLocaleDateString("es", { year: "numeric", month: "long", day: "numeric" });
-    bundleInfo.textContent = `Corpus actualizado el ${texto}.`;
+  const bundleInfo = $('#bundle-info');
+  if (!bundleInfo || !iso) return;
+  const fecha = new Date(iso);
+  const texto = Number.isNaN(fecha.getTime())
+    ? iso
+    : fecha.toLocaleDateString('es', { year: 'numeric', month: 'long', day: 'numeric' });
+  bundleInfo.textContent = `Corpus actualizado el ${texto}.`;
 }
 
 /**
@@ -396,47 +407,48 @@ function showBundleGeneratedAt(iso) {
  * corpus. Fails silently when offline — stale corpus is better than no app.
  */
 async function checkBundleFreshness() {
-    try {
-        const resp = await fetch(BUNDLE_URL, { cache: "no-cache" });
-        if (!resp.ok) return;
-        const bundle = await resp.json();
-        const serverTs = bundle.generated_at;
-        if (!serverTs) return;
+  try {
+    const resp = await fetch(BUNDLE_URL, { cache: 'no-cache' });
+    if (!resp.ok) return;
+    const bundle = await resp.json();
+    const serverTs = bundle.generated_at;
+    if (!serverTs) return;
 
-        // Read the stored timestamp from whichever storage mode is active.
-        let storedTs = null;
-        if (vaultMode === "pin") {
-            const sealed = await loadSealedVault();
-            // Can't open the sealed vault without the PIN here — read the
-            // stored generated_at from localStorage as a proxy instead.
-            storedTs = localStorage.getItem(BUNDLE_GENERATED_AT_KEY);
-        } else {
-            const stored = await loadPayloadDirect();
-            storedTs = stored && stored.bundle_generated_at
-                ? stored.bundle_generated_at
-                : localStorage.getItem(BUNDLE_GENERATED_AT_KEY);
-        }
-
-        const serverHasNewer = (() => {
-            if (!storedTs) return true;
-            try {
-                const s = new Date(serverTs).getTime();
-                const t = new Date(storedTs).getTime();
-                return Number.isFinite(s) && Number.isFinite(t) && s > t;
-            } catch {
-                return serverTs > storedTs;
-            }
-        })();
-
-        if (serverHasNewer) {
-            await deletePayloadDirect();
-            await deleteSealedVault();
-            localStorage.removeItem(BUNDLE_GENERATED_AT_KEY);
-            setVaultMode("direct");
-        }
-    } catch {
-        // Offline or fetch error — leave local storage untouched.
+    // Read the stored timestamp from whichever storage mode is active.
+    let storedTs = null;
+    if (vaultMode === 'pin') {
+      const sealed = await loadSealedVault();
+      // Can't open the sealed vault without the PIN here — read the
+      // stored generated_at from localStorage as a proxy instead.
+      storedTs = localStorage.getItem(BUNDLE_GENERATED_AT_KEY);
+    } else {
+      const stored = await loadPayloadDirect();
+      storedTs =
+        stored && stored.bundle_generated_at
+          ? stored.bundle_generated_at
+          : localStorage.getItem(BUNDLE_GENERATED_AT_KEY);
     }
+
+    const serverHasNewer = (() => {
+      if (!storedTs) return true;
+      try {
+        const s = new Date(serverTs).getTime();
+        const t = new Date(storedTs).getTime();
+        return Number.isFinite(s) && Number.isFinite(t) && s > t;
+      } catch {
+        return serverTs > storedTs;
+      }
+    })();
+
+    if (serverHasNewer) {
+      await deletePayloadDirect();
+      await deleteSealedVault();
+      localStorage.removeItem(BUNDLE_GENERATED_AT_KEY);
+      setVaultMode('direct');
+    }
+  } catch {
+    // Offline or fetch error — leave local storage untouched.
+  }
 }
 
 // Runs on every app load. generated_at sits in the bundle's plaintext
@@ -444,18 +456,18 @@ async function checkBundleFreshness() {
 // displayed corpus date without touching CLAVE_DESPLIEGUE. Fails silently
 // offline; whatever was last known (from localStorage) stays displayed.
 async function refreshBundleGeneratedAt() {
-    try {
-        const resp = await fetch(BUNDLE_URL, { cache: "no-cache" });
-        if (!resp.ok) return;
-        const bundle = await resp.json();
-        if (bundle.generated_at) {
-            localStorage.setItem(BUNDLE_GENERATED_AT_KEY, bundle.generated_at);
-            showBundleGeneratedAt(bundle.generated_at);
-        }
-    } catch {
-        // Offline, or the bundle isn't reachable right now -- not fatal,
-        // the last known date (if any) is already shown from localStorage.
+  try {
+    const resp = await fetch(BUNDLE_URL, { cache: 'no-cache' });
+    if (!resp.ok) return;
+    const bundle = await resp.json();
+    if (bundle.generated_at) {
+      localStorage.setItem(BUNDLE_GENERATED_AT_KEY, bundle.generated_at);
+      showBundleGeneratedAt(bundle.generated_at);
     }
+  } catch {
+    // Offline, or the bundle isn't reachable right now -- not fatal,
+    // the last known date (if any) is already shown from localStorage.
+  }
 }
 
 // Reads the Telegram fields into the form. Split out from initSettings()
@@ -464,149 +476,161 @@ async function refreshBundleGeneratedAt() {
 // handlePinUnlockSubmit or handleUnlockSubmit succeeds. Called again from
 // enterComposer() once a payload is actually available.
 function populateTelegramFields() {
-    const { botToken, chatId } = getTelegramConfig();
-    $("#bot-token").value = botToken;
-    $("#chat-id").value = chatId;
+  const { botToken, chatId } = getTelegramConfig();
+  $('#bot-token').value = botToken;
+  $('#chat-id').value = chatId;
 }
 
 function initSettings() {
-    // Show whatever was last known immediately (no network wait); the
-    // background refreshBundleGeneratedAt() call from init() will update
-    // this in place if a fetch succeeds and finds a newer bundle.
-    showBundleGeneratedAt(localStorage.getItem(BUNDLE_GENERATED_AT_KEY));
+  // Show whatever was last known immediately (no network wait); the
+  // background refreshBundleGeneratedAt() call from init() will update
+  // this in place if a fetch succeeds and finds a newer bundle.
+  showBundleGeneratedAt(localStorage.getItem(BUNDLE_GENERATED_AT_KEY));
 
-    $("#settings-toggle").addEventListener("click", () => {
-        $("#settings-panel").hidden = !$("#settings-panel").hidden;
-    });
+  $('#settings-toggle').addEventListener('click', () => {
+    $('#settings-panel').hidden = !$('#settings-panel').hidden;
+  });
 
-    $("#settings-form").addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const statusEl = $("#settings-status");
-        try {
-            await setTelegramConfig({
-                botToken: $("#bot-token").value.trim(),
-                chatId: $("#chat-id").value.trim(),
-            });
-            setStatus(statusEl, "Guardado.", "success");
-        } catch (err) {
-            setStatus(statusEl, err.message || "No se pudo guardar.", "error");
-        }
-    });
+  $('#settings-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const statusEl = $('#settings-status');
+    try {
+      await setTelegramConfig({
+        botToken: $('#bot-token').value.trim(),
+        chatId: $('#chat-id').value.trim(),
+      });
+      setStatus(statusEl, 'Guardado.', 'success');
+    } catch (err) {
+      setStatus(statusEl, err.message || 'No se pudo guardar.', 'error');
+    }
+  });
 }
 
 // ---------- security settings (direct <-> PIN-gated vault toggle) ----------
 
 function updateSecurityPanel() {
-    const modeStatus = $("#security-mode-status");
-    const enableForm = $("#enable-pin-form");
-    const disableButton = $("#disable-pin-button");
+  const modeStatus = $('#security-mode-status');
+  const enableForm = $('#enable-pin-form');
+  const disableButton = $('#disable-pin-button');
 
-    if (vaultMode === "pin") {
-        setStatus(modeStatus, "Este dispositivo está protegido con PIN.", "success");
-        enableForm.hidden = true;
-        disableButton.hidden = false;
-    } else {
-        setStatus(
-            modeStatus,
-            "Sin PIN: cualquiera con acceso al dispositivo puede leer el corpus y las credenciales de Telegram.",
-            "info"
-        );
-        enableForm.hidden = false;
-        disableButton.hidden = true;
-    }
+  if (vaultMode === 'pin') {
+    setStatus(modeStatus, 'Este dispositivo está protegido con PIN.', 'success');
+    enableForm.hidden = true;
+    disableButton.hidden = false;
+  } else {
+    setStatus(
+      modeStatus,
+      'Sin PIN: cualquiera con acceso al dispositivo puede leer el corpus y las credenciales de Telegram.',
+      'info'
+    );
+    enableForm.hidden = false;
+    disableButton.hidden = true;
+  }
 }
 
 function initSecuritySettings() {
-    $("#security-toggle").addEventListener("click", () => {
-        $("#security-panel").hidden = !$("#security-panel").hidden;
-        if (!$("#security-panel").hidden) updateSecurityPanel();
-    });
+  $('#security-toggle').addEventListener('click', () => {
+    $('#security-panel').hidden = !$('#security-panel').hidden;
+    if (!$('#security-panel').hidden) updateSecurityPanel();
+  });
 
-    $("#enable-pin-form").addEventListener("submit", handleEnablePin);
-    $("#disable-pin-button").addEventListener("click", handleDisablePin);
+  $('#enable-pin-form').addEventListener('submit', handleEnablePin);
+  $('#disable-pin-button').addEventListener('click', handleDisablePin);
 }
 
 async function handleEnablePin(event) {
-    event.preventDefault();
-    const statusEl = $("#security-status");
-    const newPinInput = $("#new-pin");
-    const confirmPinInput = $("#confirm-pin");
-    const newPin = newPinInput.value;
-    const confirmPin = confirmPinInput.value;
+  event.preventDefault();
+  const statusEl = $('#security-status');
+  const newPinInput = $('#new-pin');
+  const confirmPinInput = $('#confirm-pin');
+  const newPin = newPinInput.value;
+  const confirmPin = confirmPinInput.value;
 
-    if (!newPin || newPin.length < 4) {
-        setStatus(statusEl, "El PIN debe tener al menos 4 dígitos.", "error");
-        return;
-    }
-    if (newPin !== confirmPin) {
-        setStatus(statusEl, "Los PIN no coinciden.", "error");
-        return;
-    }
-    if (!payload) {
-        setStatus(statusEl, "Todavía no hay un corpus cargado.", "error");
-        return;
-    }
+  if (!newPin || newPin.length < 4) {
+    setStatus(statusEl, 'El PIN debe tener al menos 4 dígitos.', 'error');
+    return;
+  }
+  if (newPin !== confirmPin) {
+    setStatus(statusEl, 'Los PIN no coinciden.', 'error');
+    return;
+  }
+  if (!payload) {
+    setStatus(statusEl, 'Todavía no hay un corpus cargado.', 'error');
+    return;
+  }
 
-    setStatus(statusEl, "Activando PIN…", "info");
-    try {
-        // Fold today's Telegram config (still in localStorage, since we're
-        // coming from direct mode) into the payload that gets sealed, per
-        // TO_FIX.md P3-3 -- from here on it lives inside the vault instead.
-        const currentTelegram = loadTelegramConfigFromLocalStorage();
-        const toSeal = { tangos: payload.tangos, salt: payload.salt, telegram: currentTelegram };
+  setStatus(statusEl, 'Activando PIN…', 'info');
+  try {
+    // Fold today's Telegram config (still in localStorage, since we're
+    // coming from direct mode) into the payload that gets sealed, per
+    // TO_FIX.md P3-3 -- from here on it lives inside the vault instead.
+    const currentTelegram = loadTelegramConfigFromLocalStorage();
+    const toSeal = { tangos: payload.tangos, salt: payload.salt, telegram: currentTelegram };
 
-        const sealed = await sealForDevice(newPin, toSeal);
-        await saveSealedVault(sealed);
-        await deletePayloadDirect();
-        localStorage.removeItem(TELEGRAM_CONFIG_KEY);
+    const sealed = await sealForDevice(newPin, toSeal);
+    await saveSealedVault(sealed);
+    await deletePayloadDirect();
+    localStorage.removeItem(TELEGRAM_CONFIG_KEY);
 
-        payload = toSeal;
-        sessionPin = newPin;
-        setVaultMode("pin");
+    payload = toSeal;
+    sessionPin = newPin;
+    setVaultMode('pin');
 
-        newPinInput.value = "";
-        confirmPinInput.value = "";
-        populateTelegramFields();
-        setStatus(statusEl, "PIN activado. La próxima vez que abras la app, te lo va a pedir.", "success");
-        updateSecurityPanel();
-    } catch (err) {
-        setStatus(statusEl, err.message || "No se pudo activar el PIN.", "error");
-    }
+    newPinInput.value = '';
+    confirmPinInput.value = '';
+    populateTelegramFields();
+    setStatus(
+      statusEl,
+      'PIN activado. La próxima vez que abras la app, te lo va a pedir.',
+      'success'
+    );
+    updateSecurityPanel();
+  } catch (err) {
+    setStatus(statusEl, err.message || 'No se pudo activar el PIN.', 'error');
+  }
 }
 
 async function handleDisablePin() {
-    const statusEl = $("#security-status");
-    if (!sessionPin) {
-        // Shouldn't be reachable in practice -- this button is only visible
-        // after a successful PIN unlock in this same session -- but guard
-        // against it anyway rather than silently failing sealForDevice below.
-        setStatus(statusEl, "No se puede desactivar el PIN sin haberlo desbloqueado en esta sesión.", "error");
-        return;
-    }
-    if (!confirm("¿Desactivar el PIN? El corpus y las credenciales de Telegram van a quedar sin cifrar en este dispositivo.")) {
-        return;
-    }
+  const statusEl = $('#security-status');
+  if (!sessionPin) {
+    // Shouldn't be reachable in practice -- this button is only visible
+    // after a successful PIN unlock in this same session -- but guard
+    // against it anyway rather than silently failing sealForDevice below.
+    setStatus(
+      statusEl,
+      'No se puede desactivar el PIN sin haberlo desbloqueado en esta sesión.',
+      'error'
+    );
+    return;
+  }
+  if (
+    !confirm(
+      '¿Desactivar el PIN? El corpus y las credenciales de Telegram van a quedar sin cifrar en este dispositivo.'
+    )
+  ) {
+    return;
+  }
 
-    setStatus(statusEl, "Desactivando…", "info");
-    try {
-        const sealed = await loadSealedVault();
-        const opened = await openDeviceVault(sessionPin, sealed);
-        const telegram = opened.telegram || { botToken: "", chatId: "" };
+  setStatus(statusEl, 'Desactivando…', 'info');
+  try {
+    const sealed = await loadSealedVault();
+    const opened = await openDeviceVault(sessionPin, sealed);
+    const telegram = opened.telegram || { botToken: '', chatId: '' };
 
-        await savePayloadDirect({ tangos: opened.tangos, salt: opened.salt });
-        saveTelegramConfigToLocalStorage(telegram);
-        await deleteSealedVault();
+    await savePayloadDirect({ tangos: opened.tangos, salt: opened.salt });
+    saveTelegramConfigToLocalStorage(telegram);
+    await deleteSealedVault();
 
-        payload = { tangos: opened.tangos, salt: opened.salt };
-        sessionPin = null;
-        setVaultMode("direct");
+    payload = { tangos: opened.tangos, salt: opened.salt };
+    sessionPin = null;
+    setVaultMode('direct');
 
-        populateTelegramFields();
-        setStatus(statusEl, "PIN desactivado.", "success");
-        updateSecurityPanel();
-    } catch (err) {
-        setStatus(statusEl, err.message || "No se pudo desactivar el PIN.", "error");
-    }
+    populateTelegramFields();
+    setStatus(statusEl, 'PIN desactivado.', 'success');
+    updateSecurityPanel();
+  } catch (err) {
+    setStatus(statusEl, err.message || 'No se pudo desactivar el PIN.', 'error');
+  }
 }
 
 // ---------- deep link / incoming ciphertext ----------
@@ -630,23 +654,23 @@ async function handleDisablePin() {
  *   going through an unlock screen (vault was already open this session).
  */
 function applyDeepLinkIfPending(autoRun = false) {
-    if (!pendingDeepLink) return;
-    const codigo = pendingDeepLink;
-    pendingDeepLink = null;
+  if (!pendingDeepLink) return;
+  const codigo = pendingDeepLink;
+  pendingDeepLink = null;
 
-    setMode("descifrar");
-    $("#message-input").value = codigo;
+  setMode('descifrar');
+  $('#message-input').value = codigo;
 
-    if (autoRun) {
-        // Vault already open — run decryption immediately. handleRunAction()
-        // handles both the success path (renders plaintext) and the error
-        // path (shows descriptive status message) without any extra code here.
-        handleRunAction();
-    } else {
-        // Vault was just unlocked — surface a hint so the user knows what
-        // landed in the field and what to do next.
-        setStatus($("#composer-status"), "Mensaje recibido — tocá Descifrar para leerlo.", "info");
-    }
+  if (autoRun) {
+    // Vault already open — run decryption immediately. handleRunAction()
+    // handles both the success path (renders plaintext) and the error
+    // path (shows descriptive status message) without any extra code here.
+    handleRunAction();
+  } else {
+    // Vault was just unlocked — surface a hint so the user knows what
+    // landed in the field and what to do next.
+    setStatus($('#composer-status'), 'Mensaje recibido — tocá Descifrar para leerlo.', 'info');
+  }
 }
 
 // Module-level variable — set by consumeDeepLink() inside init(), before
@@ -656,117 +680,117 @@ function applyDeepLinkIfPending(autoRun = false) {
 let pendingDeepLink = null;
 
 function enterComposer(autoRunDeepLink = false) {
-    populateTangoSelect();
-    populateTelegramFields();
-    setMode("cifrar");
-    showScreen("app");
-    applyDeepLinkIfPending(autoRunDeepLink);
+  populateTangoSelect();
+  populateTelegramFields();
+  setMode('cifrar');
+  showScreen('app');
+  applyDeepLinkIfPending(autoRunDeepLink);
 }
 
 async function init() {
-    // Read and clear any incoming ciphertext (from ?c= query param or shared
-    // file) before any async work, so the URL is clean before vault unlock.
-    pendingDeepLink = await resolveIncoming({ loc: location, hist: history });
-    $("#unlock-form").addEventListener("submit", handleUnlockSubmit);
-    $("#pin-unlock-form").addEventListener("submit", handlePinUnlockSubmit);
-    $("#mode-cifrar").addEventListener("click", () => setMode("cifrar"));
-    $("#mode-descifrar").addEventListener("click", () => setMode("descifrar"));
-    $("#run-action").addEventListener("click", handleRunAction);
-    $("#copy-button").addEventListener("click", handleCopy);
-    $("#send-button").addEventListener("click", handleSend);
+  // Read and clear any incoming ciphertext (from ?c= query param or shared
+  // file) before any async work, so the URL is clean before vault unlock.
+  pendingDeepLink = await resolveIncoming({ loc: location, hist: history });
+  $('#unlock-form').addEventListener('submit', handleUnlockSubmit);
+  $('#pin-unlock-form').addEventListener('submit', handlePinUnlockSubmit);
+  $('#mode-cifrar').addEventListener('click', () => setMode('cifrar'));
+  $('#mode-descifrar').addEventListener('click', () => setMode('descifrar'));
+  $('#run-action').addEventListener('click', handleRunAction);
+  $('#copy-button').addEventListener('click', handleCopy);
+  $('#send-button').addEventListener('click', handleSend);
 
-    // "Abrir archivo cifrado" button — visible in Descifrar mode.
-    // Triggers the hidden #open-file input so the receiver can open a .txt
-    // attachment sent via documentTransport (strategy #2).
-    const openFileButton = $("#open-file-button");
-    if (openFileButton) {
-        openFileButton.addEventListener("click", () => {
-            const input = $("#open-file");
-            if (input) input.click();
-        });
-    }
-
-    // File input fallback for receiving ciphertext via shared .txt file
-    // (document transport strategy). Works before Web Share Target is wired.
-    const openFileInput = $("#open-file");
-    if (openFileInput) {
-        openFileInput.addEventListener("change", async (e) => {
-            const file = e.target.files && e.target.files[0];
-            if (!file) return;
-            const codigo = await resolveIncoming({ sharedFile: file });
-            // Reset the input so the same file can be opened again if needed.
-            openFileInput.value = "";
-            if (codigo) {
-                pendingDeepLink = codigo;
-                applyDeepLinkIfPending(/* autoRun */ vaultMode === "direct" && !!payload);
-            }
-        });
-    }
-
-    // Hide the send-row and clear the output whenever the textarea is emptied.
-    // Without this, clicking Cifrar then erasing the text leaves the Copiar /
-    // Enviar buttons visible with stale ciphertext behind them.
-    $("#message-input").addEventListener("input", () => {
-        if (!$("#message-input").value.trim()) {
-            $("#send-row").hidden = true;
-            $("#send-row").dataset.cipherText = "";
-            $("#output-strip").innerHTML = "";
-            setStatus($("#composer-status"), "", "info");
-        }
+  // "Abrir archivo cifrado" button — visible in Descifrar mode.
+  // Triggers the hidden #open-file input so the receiver can open a .txt
+  // attachment sent via documentTransport (strategy #2).
+  const openFileButton = $('#open-file-button');
+  if (openFileButton) {
+    openFileButton.addEventListener('click', () => {
+      const input = $('#open-file');
+      if (input) input.click();
     });
-    initSettings();
-    initSecuritySettings();
+  }
 
-    vaultMode = getVaultMode();
+  // File input fallback for receiving ciphertext via shared .txt file
+  // (document transport strategy). Works before Web Share Target is wired.
+  const openFileInput = $('#open-file');
+  if (openFileInput) {
+    openFileInput.addEventListener('change', async e => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const codigo = await resolveIncoming({ sharedFile: file });
+      // Reset the input so the same file can be opened again if needed.
+      openFileInput.value = '';
+      if (codigo) {
+        pendingDeepLink = codigo;
+        applyDeepLinkIfPending(/* autoRun */ vaultMode === 'direct' && !!payload);
+      }
+    });
+  }
 
-    // Check if the server has a newer bundle than what's stored locally.
-    // generated_at lives in the bundle's plaintext metadata (outside AES-GCM),
-    // so we can compare without CLAVE_DESPLIEGUE. If the server bundle is
-    // newer, wipe local storage and force re-unlock so the user gets the
-    // updated corpus (e.g. a new tango was added).
-    await checkBundleFreshness();
-
-    // Fire-and-forget: keeps the displayed corpus date up to date in settings.
-    refreshBundleGeneratedAt();
-
-    if (vaultMode === "pin" && (await hasSealedVault())) {
-        showScreen("pin-unlock");
-    } else if (await hasPayloadDirect()) {
-        payload = await loadPayloadDirect();
-        enterComposer(true); // vault was already open — auto-run deep link if present
-    } else {
-        // Covers true first run, and the edge case where localStorage says
-        // 'pin' but the sealed IndexedDB record is missing (e.g. the user
-        // cleared site data by hand) -- fall back to asking for
-        // CLAVE_DESPLIEGUE again instead of showing a PIN prompt that can
-        // never succeed.
-        setVaultMode("direct");
-        showScreen("unlock");
+  // Hide the send-row and clear the output whenever the textarea is emptied.
+  // Without this, clicking Cifrar then erasing the text leaves the Copiar /
+  // Enviar buttons visible with stale ciphertext behind them.
+  $('#message-input').addEventListener('input', () => {
+    if (!$('#message-input').value.trim()) {
+      $('#send-row').hidden = true;
+      $('#send-row').dataset.cipherText = '';
+      $('#output-strip').innerHTML = '';
+      setStatus($('#composer-status'), '', 'info');
     }
+  });
+  initSettings();
+  initSecuritySettings();
 
-    if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./service-worker.js")
-            .then((registration) => {
-                // Browsers only check service-worker.js for changes in the
-                // background every ~24h by default. Forcing a check on every
-                // load means a forgotten CACHE_VERSION bump still gets
-                // noticed the next time the user opens the app, not up to a
-                // day later.
-                registration.update().catch(() => {});
-            })
-            .catch(() => {
-                // Offline install just won't be available this session; the app
-                // still works online without it.
-            });
+  vaultMode = getVaultMode();
 
-        // When a new SW takes control (skipWaiting fired), reload the page so
-        // the new shell + purged caches take effect immediately — without this,
-        // the old in-memory JS keeps running even though the new SW is active.
-        navigator.serviceWorker.addEventListener("controllerchange", () => {
-            window.location.reload();
-        });
-    }
+  // Check if the server has a newer bundle than what's stored locally.
+  // generated_at lives in the bundle's plaintext metadata (outside AES-GCM),
+  // so we can compare without CLAVE_DESPLIEGUE. If the server bundle is
+  // newer, wipe local storage and force re-unlock so the user gets the
+  // updated corpus (e.g. a new tango was added).
+  await checkBundleFreshness();
+
+  // Fire-and-forget: keeps the displayed corpus date up to date in settings.
+  refreshBundleGeneratedAt();
+
+  if (vaultMode === 'pin' && (await hasSealedVault())) {
+    showScreen('pin-unlock');
+  } else if (await hasPayloadDirect()) {
+    payload = await loadPayloadDirect();
+    enterComposer(true); // vault was already open — auto-run deep link if present
+  } else {
+    // Covers true first run, and the edge case where localStorage says
+    // 'pin' but the sealed IndexedDB record is missing (e.g. the user
+    // cleared site data by hand) -- fall back to asking for
+    // CLAVE_DESPLIEGUE again instead of showing a PIN prompt that can
+    // never succeed.
+    setVaultMode('direct');
+    showScreen('unlock');
+  }
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker
+      .register('./service-worker.js')
+      .then(registration => {
+        // Browsers only check service-worker.js for changes in the
+        // background every ~24h by default. Forcing a check on every
+        // load means a forgotten CACHE_VERSION bump still gets
+        // noticed the next time the user opens the app, not up to a
+        // day later.
+        registration.update().catch(() => {});
+      })
+      .catch(() => {
+        // Offline install just won't be available this session; the app
+        // still works online without it.
+      });
+
+    // When a new SW takes control (skipWaiting fired), reload the page so
+    // the new shell + purged caches take effect immediately — without this,
+    // the old in-memory JS keeps running even though the new SW is active.
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      window.location.reload();
+    });
+  }
 }
 
 init();
-

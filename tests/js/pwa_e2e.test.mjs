@@ -8,16 +8,24 @@ global.indexedDB = (await import('fake-indexeddb')).indexedDB;
 // Minimal localStorage stub
 global.localStorage = {
   _store: Object.create(null),
-  getItem(k) { return this._store[k] ?? null; },
-  setItem(k, v) { this._store[k] = String(v); },
-  removeItem(k) { delete this._store[k]; },
+  getItem(k) {
+    return this._store[k] ?? null;
+  },
+  setItem(k, v) {
+    this._store[k] = String(v);
+  },
+  removeItem(k) {
+    delete this._store[k];
+  },
 };
 
 // Node 20 has globalThis.crypto.subtle and fetch.
 
 const basePath = new URL('../../pwa/', import.meta.url);
 
-const { unlockDeployBundle, savePayloadDirect, loadPayloadDirect, hasPayloadDirect } = await import(new URL('secure-vault.js', basePath));
+const { unlockDeployBundle, savePayloadDirect, loadPayloadDirect, hasPayloadDirect } = await import(
+  new URL('secure-vault.js', basePath)
+);
 const { cifrarMensaje, descifrarMensaje } = await import(new URL('cipherEngine.js', basePath));
 
 function bytesToB64(bytes) {
@@ -30,12 +38,28 @@ async function makeBundle(passphrase, payload) {
   // Derive key with PBKDF2 (matches secure-vault.js expectations)
   const enc = new TextEncoder();
   const kdfSalt = crypto.getRandomValues(new Uint8Array(16));
-  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(passphrase), { name: 'PBKDF2' }, false, ['deriveBits','deriveKey']);
-  const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: kdfSalt, iterations: 600000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(passphrase),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits', 'deriveKey']
+  );
+  const key = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: kdfSalt, iterations: 600000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt']
+  );
   const nonce = crypto.getRandomValues(new Uint8Array(12));
   const aad = new TextEncoder().encode('tango-cifrado-bundle-v1');
   const plaintext = new TextEncoder().encode(JSON.stringify(payload));
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, additionalData: aad }, key, plaintext);
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: nonce, additionalData: aad },
+    key,
+    plaintext
+  );
   return {
     version: 1,
     kdf: 'PBKDF2-HMAC-SHA256',
@@ -52,24 +76,24 @@ test('unlockDeployBundle: unsupported version is rejected before any decrypt att
   const bundle = await makeBundle(pass, { tangos: {}, salt: 47 });
 
   bundle.version = 2;
-  await assert.rejects(
-    () => unlockDeployBundle(pass, bundle),
-    /Versión de bundle no soportada/
-  );
+  await assert.rejects(() => unlockDeployBundle(pass, bundle), /Versión de bundle no soportada/);
 
   delete bundle.version;
-  await assert.rejects(
-    () => unlockDeployBundle(pass, bundle),
-    /Versión de bundle no soportada/
-  );
+  await assert.rejects(() => unlockDeployBundle(pass, bundle), /Versión de bundle no soportada/);
 });
 
 test('PWA E2E: first-run unlock → save → cipher/descipher → malformed handling → telegram persistence', async () => {
   const payload = {
     tangos: {
-      "3": { titulo: 'Cambalache', versos: [ ['Que','el','mundo'], ['mañana','subir'] ] }
+      3: {
+        titulo: 'Cambalache',
+        versos: [
+          ['Que', 'el', 'mundo'],
+          ['mañana', 'subir'],
+        ],
+      },
     },
-    salt: 47
+    salt: 47,
   };
 
   const pass = 'test-deploy-pass';

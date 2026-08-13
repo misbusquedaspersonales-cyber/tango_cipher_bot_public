@@ -36,6 +36,6 @@
 
 // Telegram Bot API limits — shared across transports that need to reason
 // about them. Do not duplicate these numbers in individual transport files.
-export const TELEGRAM_TEXT_MAX = 4096;      // sendMessage text limit (chars)
+export const TELEGRAM_TEXT_MAX = 4096; // sendMessage text limit (chars)
 export const TELEGRAM_BUTTON_URL_MAX = 2048; // inline_keyboard button url limit (bytes)
 export const TELEGRAM_DOCUMENT_MAX = 50 * 1024 * 1024; // sendDocument limit (bytes) — for reference only, not enforced client-side

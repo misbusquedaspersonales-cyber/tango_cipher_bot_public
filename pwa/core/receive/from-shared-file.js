@@ -21,8 +21,8 @@
  * @returns {Promise<string|null>}
  */
 export async function resolveFromSharedFile(file) {
-    if (!file) return null;
-    const text = await file.text();
-    const trimmed = text.trim();
-    return trimmed.length > 0 ? trimmed : null;
+  if (!file) return null;
+  const text = await file.text();
+  const trimmed = text.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }

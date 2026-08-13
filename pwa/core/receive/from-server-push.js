@@ -15,5 +15,5 @@
  * @returns {string|null}
  */
 export function resolveFromServerPush(_pushPayload) {
-    throw new Error("server-push resolver is not implemented.");
+  throw new Error('server-push resolver is not implemented.');
 }

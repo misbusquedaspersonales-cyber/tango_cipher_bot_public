@@ -21,8 +21,8 @@
  *                                      Web Share Target (document path)
  */
 
-import { resolveFromQueryParam } from "./from-query-param.js";
-import { resolveFromSharedFile } from "./from-shared-file.js";
+import { resolveFromQueryParam } from './from-query-param.js';
+import { resolveFromSharedFile } from './from-shared-file.js';
 
 /**
  * Try every known receive path in priority order. Returns the first
@@ -32,15 +32,15 @@ import { resolveFromSharedFile } from "./from-shared-file.js";
  * @returns {Promise<string|null>}
  */
 export async function resolveIncoming(opts = {}) {
-    const { loc = location, hist = history, sharedFile = null } = opts;
+  const { loc = location, hist = history, sharedFile = null } = opts;
 
-    // 1. ?c= query param — synchronous, no I/O.
-    const fromParam = resolveFromQueryParam(loc, hist);
-    if (fromParam) return fromParam;
+  // 1. ?c= query param — synchronous, no I/O.
+  const fromParam = resolveFromQueryParam(loc, hist);
+  if (fromParam) return fromParam;
 
-    // 2. Shared/opened file — async file read.
-    const fromFile = await resolveFromSharedFile(sharedFile);
-    if (fromFile) return fromFile;
+  // 2. Shared/opened file — async file read.
+  const fromFile = await resolveFromSharedFile(sharedFile);
+  if (fromFile) return fromFile;
 
-    return null;
+  return null;
 }
