@@ -5,17 +5,21 @@
 ### Fixed
 
 - **CI build-twa-apk failing with exit code 130 on `Install @bubblewrap/cli` step** —
-  `npm install -g @bubblewrap/cli@latest` triggers a postinstall interactive JDK prompt
-  (`"Do you want Bubblewrap to install the JDK?"`) that kills the job immediately because
-  CI stdin is closed. Root cause: `BUBBLEWRAP_VERSION: "latest"` picked up a version whose
-  postinstall fires the prompt even when JDK is already installed (via `setup-java`).
-  Fixed in `.github/workflows/build-twa-apk.yml`:
-  1. Pinned `BUBBLEWRAP_VERSION` from `"latest"` → `"1.21.1"` (last known-stable version
-     without the postinstall prompt bug).
-  2. Added `CI: "true"` and `BUBBLEWRAP_SKIP_JAVA_CHECK: "1"` env vars to the install
-     step — suppresses the JDK check in bubblewrap's postinstall script.
-  3. Belt-and-suspenders: piped `printf 'n\nn\n'` into `npm install -g` so any remaining
-     prompt still receives an answer instead of blocking indefinitely.
+  `npm install -g @bubblewrap/cli` triggers a postinstall interactive JDK prompt
+  (`"Do you want Bubblewrap to install the JDK?"`) that kills the job (exit 130 = SIGINT)
+  because CI stdin is closed. The following attempts all **failed**:
+  - `CI=true` env var — bubblewrap ignores it in its postinstall
+  - `BUBBLEWRAP_SKIP_JAVA_CHECK=1` — confirmed non-functional in run 31669047391
+  - `printf 'n\nn\n' | npm install` — npm doesn't pass stdin to postinstall subprocesses
+  - Pinning to `1.21.1` — the prompt exists in that version too
+
+  **Actual fix** (run after 31669047391): `--ignore-scripts` flag on `npm install -g`.
+  This prevents npm from running any lifecycle scripts at all, including postinstall.
+  Bubblewrap finds JDK at runtime via `JAVA_HOME` (set by `actions/setup-java@v4`),
+  not via postinstall — so skipping postinstall doesn't break any functionality.
+  ```yaml
+  npm install -g @bubblewrap/cli@${{ env.BUBBLEWRAP_VERSION }} --ignore-scripts
+  ```
 
 ### Added / Documented
 

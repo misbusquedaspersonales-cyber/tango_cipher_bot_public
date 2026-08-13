@@ -526,40 +526,43 @@ porque el postinstall corre en un subshell separado donde `JAVA_HOME` aún no es
 > **`CI=true` solo no alcanza** — `npm` lo propaga para suprimir barra de progreso, pero
 > bubblewrap no lo lee para saltar su postinstall personalizado.
 
-### Solución aplicada en este proyecto (2026-08-13)
+### Intentos fallidos (documentados para no repetirlos)
 
-En `.github/workflows/build-twa-apk.yml` se hicieron tres cambios:
+| Intento | Resultado |
+|---|---|
+| `CI=true` en env del step | ❌ El prompt igual se dispara |
+| `BUBBLEWRAP_SKIP_JAVA_CHECK=1` en env | ❌ El prompt igual se dispara (confirmado en run 31669047391) |
+| `printf 'n\nn\n' \| npm install` | ❌ npm no pasa el stdin al subproceso postinstall |
+| Pinear a `1.21.1` | ❌ No cambia nada, el prompt existe en esa versión también |
 
-1. **Pinear la versión** — cambiar `BUBBLEWRAP_VERSION: "latest"` por una versión estable
-   que no tenga el prompt en postinstall:
-   ```yaml
-   env:
-     BUBBLEWRAP_VERSION: "1.21.1"   # era "latest"
+### Solución aplicada en este proyecto (2026-08-13, run 31669047391+)
+
+Usar `--ignore-scripts` en `npm install -g` para que npm **no ejecute ningún lifecycle script**
+(ni `postinstall`, ni `preinstall`, ni `install`). El JDK prompt vive en `postinstall`;
+aletarlo elimina el prompt completamente.
+
+Bubblewrap encuentra JDK en tiempo de ejecución a través de `JAVA_HOME` (exportado por
+`actions/setup-java@v4`), no a través del postinstall — así que saltear postinstall
+**no rompe** ninguna funcionalidad de bubblewrap.
+
+```yaml
+- name: Install @bubblewrap/cli
+  run: |
+    npm install -g @bubblewrap/cli@${{ env.BUBBLEWRAP_VERSION }} --ignore-scripts
+    bubblewrap --version
+```
+
+### Si el problema vuelve en el futuro
+
+1. Verificar que `--ignore-scripts` sigue en el step. Si alguien lo quitó, restaurarlo.
+2. Si `bubblewrap --version` falla después de `--ignore-scripts`, significa que el postinstall
+   hace algo necesario para inicializar el binario. En ese caso, crear un step adicional:
+   ```bash
+   # Alternativa si --ignore-scripts rompe bubblewrap:
+   JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) \
+     npm install -g @bubblewrap/cli@${{ env.BUBBLEWRAP_VERSION }}
    ```
-
-2. **Variables de entorno en el step de instalación**:
-   ```yaml
-   - name: Install @bubblewrap/cli
-     env:
-       CI: "true"
-       BUBBLEWRAP_SKIP_JAVA_CHECK: "1"   # <-- clave; saltea el postinstall JDK check
-     run: |
-       printf 'n\nn\n' | npm install -g @bubblewrap/cli@${{ env.BUBBLEWRAP_VERSION }}
-       bubblewrap --version
-   ```
-
-3. **Pipe de respuesta automática** (`printf 'n\nn\n' |`) como seguro adicional por si
-   otro prompt se cuela en builds futuros.
-
-### Si el problema vuelve con una versión nueva de bubblewrap
-
-1. Verificar en [npmjs.com/package/@bubblewrap/cli](https://www.npmjs.com/package/@bubblewrap/cli)
-   qué versión es `latest` actualmente.
-2. Buscar en el `CHANGELOG` de bubblewrap si introdujeron cambios en `postinstall`.
-3. Si el prompt cambió de texto o de variable de control, actualizar `BUBBLEWRAP_SKIP_JAVA_CHECK`
-   al nuevo nombre o agregar más respuestas al `printf`.
-4. Alternativamente, volver a pinear a `1.21.1` que es la última versión verificada como
-   funcional en CI sin prompts.
+   Esto fuerza `java` en PATH antes de que el postinstall corra, evitando el false positive.
 
 ---
 

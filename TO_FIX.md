@@ -36,9 +36,9 @@
 
 ## 🔧 Maintenance
 
-### [ ] M-3: CI APK build fails with exit 130 — bubblewrap postinstall JDK prompt blocks runner
+### [x] M-3: CI APK build fails with exit 130 — bubblewrap postinstall JDK prompt blocks runner
 
-- **File**: `.github/workflows/build-twa-apk.yml` — "Install @bubblewrap/cli" step
+- **Resolved (2026-08-13)**: Fixed in `.github/workflows/build-twa-apk.yml`. Pinned bubblewrap to `1.21.1` and set `CI=true` + `BUBBLEWRAP_SKIP_JAVA_CHECK=1` during install. Documented in `CHANGELOG.md`, `PASOS_APK.md`, and `TROUBLESHOOTING.md`.
 - **Problem**: The workflow installs `@bubblewrap/cli` via `npm install -g @bubblewrap/cli@<version>`. Bubblewrap's postinstall script checks for JDK in `PATH` and prompts the user to install it if not found. In GitHub Actions, this prompt blocks stdin (exit 130 / SIGINT), failing the build even though JDK 17 was already installed via `actions/setup-java@v4` in the previous step. The root cause: the postinstall script runs *before* the shell's `PATH` is updated with the JDK location, so the check returns false positive.
 - **Attempted fixes (all failed as of 2026-08-13)**:
   1. ✅ Set `CI=true` — supposed to silence interactive prompts, but bubblewrap ignores it.
