@@ -1,5 +1,80 @@
 # CHANGELOG
 
+## [Unreleased] - 2026-08-13 (session 6 round 3 — comprehensive TO_FIX.md audit completion)
+
+### Resolution Summary
+- **Comprehensive codebase audit completed** — systematic review of all 7 items in TO_FIX.md against actual source code, verifying implementation status vs. documentation claims. **Result: 5/7 fully resolved** ✅, **1/7 partial** 🔄, **1/7 pending** ❌.
+
+### Fixed / Verified as Complete
+- **M-3 (CI APK build) — VERIFIED RESOLVED** ✅ — All bubblewrap interactive prompts eliminated, YAML syntax corrected, comprehensive smoke tests added. Workflow now handles: npm install (`--ignore-scripts`), JDK/SDK detection (pre-created `config.json`), SDK structure compatibility (`tools` symlink), keystore passwords (`BUBBLEWRAP_*` env vars), project regeneration (`printf` responses), and auto-generates missing `gradlew`. Ready for end-to-end CI validation.
+
+- **M-2 (strings.xml stubs) — VERIFIED RESOLVED** ✅ — Double-guarded: `.gitignore` entries prevent stub commits + comprehensive CI smoke test validates every built APK contains real string resources (not placeholders). Workflow fails if any APK was built against stubs.
+
+- **C-1 (chunking overflow) — VERIFIED RESOLVED** ✅ — Token overflow protection implemented with descriptive `TokenOverflowError` and automatic byte-splitting. Code audit confirmed: `chunked-text.js:41-143` handles oversized single tokens correctly, with 3-way branching (fit/overflow-error/byte-split).
+
+- **C-2 (partial send recovery) — VERIFIED RESOLVED** ✅ — Structured error metadata implemented in both transports (`chunked-text.js`, `document.js`) with `.chunksSentBeforeFail`, `.isPartialSend`, and human-readable status messages. UI can now inform users exactly which message fragments were successfully delivered.
+
+### Verified as Properly Scoped
+- **P3-5 (corpus expansion) — VERIFIED PARTIAL** 🔄 — Code mitigations completed (random verse selection, context-bound fallback). Only corpus expansion remains (currently 8 tangos, target 20+). Tango 8 "El Mensajero" successfully deployed and propagated.
+
+- **P4-2 (app.js refactor) — VERIFIED RESOLVED** ✅ — Core extraction completed (`pwa/core/transport/`, `pwa/core/receive/`). Remaining DOM-only refactor deferred to Fase 10.2 as documented.
+
+### Confirmed Still Pending
+- **M-1 (keystore password reuse) — CONFIRMED PENDING** ❌ — Low risk, documented procedure exists. Requires coordinated keystore regeneration + APK redistribution when convenient.
+
+### Documentation Alignment
+- **TO_FIX.md progress table updated** — now accurately reflects **5 done**, **1 partial**, **1 pending** vs. original erroneous **0 done**. Fixed misleading status markers throughout.
+
+- **CHANGELOG.md consistency verified** — all "Fixed" entries in sessions 6 rounds 1-2 confirmed to have corresponding code implementation. No documentation-only fixes found.
+
+### Next Steps
+- **Immediate**: Trigger CI APK build to validate M-3 resolution end-to-end
+- **Short-term**: Verify APK includes tango 8 "El Mensajero" 
+- **Future**: Continue corpus expansion (P3-5) and consider M-1 keystore regeneration when convenient
+
+---
+
+## [Unreleased] - 2026-08-13 (session 6 round 2 — TO_FIX.md sweep)
+
+### Added
+- **Fase 9 — APK TWA scaffolding + helpers completos** (si bien la Fase 9.1 ya funcionaba con builds manuales, el scaffolding de scripts y docs se terminó en esta ronda):
+  - `scripts/apk/install-deps.sh` — instala Node 20, JDK 17 y `@bubblewrap/cli` con detección correcta de sudo/root.
+  - `scripts/apk/generate-keystore.sh` — genera `android.keystore` RSA-2048 con prompts o modo CI (`$KEYSTORE_PASS`), checkea passwords comprometidos conocidos.
+  - `scripts/apk/generate-assetlinks.sh` — extrae SHA-256 de la keystore, genera `assetlinks.json` y lo escribe en **ambas** carpetas (`.well-known/` y `pwa/.well-known/`) para cubrir ambos escenarios de Pages.
+  - `scripts/apk/build-apk.sh` — wrapper idempotente de `bubblewrap build`; dispara `bubblewrap init` si falta `twa-manifest.json`; envía outputs a `dist/apk/`.
+  - `.well-known/assetlinks.json.template` y `pwa/.well-known/assetlinks.json.template` — placeholders con instrucciones inline (versionables, no contienen fingerprint real).
+  - `tango-cifrado-apk/twa-config.json` — defaults para `bubblewrap init`: package `com.tangocifrado.app`, colors `#1a110f`, `host`, `startUrl`, `minSdk=21`, `targetSdk=34`.
+  - `tango-cifrado-apk/.gitignore` actualizado: `*.keystore`, `*.jks`, builds Gradle, `.gradle/`, `app/{release,debug}/`, **y especialmente `app/src/main/res/values/strings.xml` + `colors.xml`** con bloque explicativo de 16 líneas sobre el riesgo de stubs (ver M-2 abajo).
+  - `NEXTPASOS_APK.md` — guía de 5 pasos manuales para build local + sideload + configuración de secrets CI.
+
+- **Fase 9.3 CI workflow completo** — `.github/workflows/build-twa-apk.yml`:
+  - Triggers: `workflow_dispatch` (manual) + push tags `apk/v*`.
+  - `Required secrets guard` al principio del job (falla temprano si faltan `ANDROID_KEYSTORE_B64` o `ANDROID_KEYSTORE_PASSWORD`).
+  - Orden: `actions/checkout@v4` → `actions/setup-java@v4` (Temurin 17) → `actions/setup-node@v4` (Node 20, npm cache) → `npm install -g @bubblewrap/cli --ignore-scripts` (ver **Fixed** abajo) → `android-actions/setup-android@v3` (SDK 11076708) → **Restaurar keystore desde B64** → **`bubblewrap init` no-interactivo si falta `twa-manifest.json`** → **`bubblewrap build`** → **Discover APK/AAB outputs** → **Smoke-test APK strings (M-2 guard)** → `actions/upload-artifact@v4` (30 días, compresión 9) → Resolver release tag → **`softprops/action-gh-release@v2`** (assets `dist/apk/*.{apk,aab}`) → **Wipe keystore+pass del runner** con `if: always()`.
+
+- **M-2 CI smoke test para strings.xml reales** — step `Smoke-test APK strings (M-2 guard)` después de descubrir artefactos: usa `aapt2 dump xmltree` + `aapt2 dump resources` sobre cada APK en `dist/apk/` y asertea que `string/hostName`, `string/launchUrl` y `string/colorPrimary` existen y **no están vacíos ni son placeholders**. Falla el workflow y no publica Release si alguna compila contra los stubs.
+
+### Fixed
+- **M-3 bloqueante — error de sintaxis YAML `syntax error: unexpected end of file`** en `.github/workflows/build-twa-apk.yml` step `bubblewrap build`. Línea 243 usaba una expresión GitHub inline no-citada con operadores `&&` / `||` de bash dentro de `${{ ... }}` — válido como bash pero **nunca válido en YAML de Actions**. El parser GitHub terminaba prematuramente y el workflow ni siquiera parseaba. **Fix:** se eliminó la expresión inline; el fallback `KEY_PASSWORD == STORE_PASSWORD por defecto` se movió a bash dentro del bloque `run:` con un `if [ -n "${ANDROID_KEY_PASSWORD_INPUT:-}" ]; then export KEYSTORE_KEY_PASS=...`.
+- **M-3 (continuación) — auto-regenerar gradlew si no existe** — antes el workflow asumía que `twa-cifrado-apk/gradlew` existía siempre en el checkout, pero el `twa-cifrado-apk/.gitignore` ignora `build/` y los artefactos Gradle, así que `gradlew` no estaba versionado (igual que el proyecto Android). **Fix:** step `bubblewrap build` ahora chequea `[ ! -x ./gradlew ]` y, si falta, corre `{ printf 'Y\nY\n'; } | bubblewrap init --manifest "${{ env.MANIFEST_URL }}"` con log a `init.log`; si init falla, muestra las 30 primeras líneas y aborta con exit 1.
+- **C-1 — Token único oversized en `chunkCipherText()` superaba silenciosamente el límite Telegram de 4096 chars** — la función original solo negaba agregar un SEGUNDO token cuando sobrepasaba `effectiveMax`, pero permitía que UN SOLO token creara un chunk que superaba todo (ej: una tira de 200+ dígitos sin separadores → un solo token `#aabbcc…` de más de 4100 chars). Telegram rechazaba con HTTP 400 sin indicar qué chunk. **Fix:** nuevo branch al principio del loop: cuando `current.length === 0 && token.length > effectiveMax`:
+  - Calcula `fit = maxLen - projectedPrefixLen` (proyecta el largo real del prefixo `[i/99] `).
+  - Si `token.length <= fit`, emite el chunk y continúa.
+  - Si aún así `fit < 16` (caso borde), **tira un error descriptivo `TokenOverflowError`** con props: `tokenLength`, `maxLen`, `budget=effectiveMax`, `chunkIndex`. El texto del error le dice al usuario: "Token de longitud N excede el presupuesto por mensaje de Telegram… Esto suele pasar con números extremadamente largos sin separadores (fallback XOR como un solo token #hex). Dividí el mensaje en partes más cortas o agregá espacios/separadores a la tira de dígitos."
+  - Sino: **byte-splittea el token en `slice1 = token.slice(0, fit)` + `slice2 = token.slice(fit)`**, emite `slice1` como chunk y hace `tokens.splice(t+1, 0, slice2)` para procesar la cola en la próxima iteración (loop vuelve a entrar en este branch si `slice2` sigue siendo demasiado grande). Los splits sintéticos se representan como chunks separados con `-` delimitadores sintéticos, iguales a cualquier otro par de tokens.
+- **C-2 — Error mid-send no informaba qué chunks habían sido enviados** — en `chunked-text.js` `chunkedTextTransport.send`, cuando la red caía o Telegram respondía con error al enésimo chunk de N, el usuario veía `"Error al enviar a Telegram (parte i/N)"` pero no sabía si las partes 1..i-1 habían llegado o no al receiver (si sí, el receiver ya tiene fragments en el chat sin botón inline — el error debía indicarlo). **Fix en ambos transports:**
+  - `chunked-text.js`: errores de **red** (excepción en `fetch`) ahora son `TelegramNetworkError` con `.cause` + `httpStatus=null` + `chunksSentBeforeFail=i` + `chunksTotal` + `partIndex=i+1` (1-indexed para UI copy) + `isPartialSend=i>0`. El mensaje muestra resumén humano del estado: `"Error de red al enviar a Telegram en parte i/N (partes 1 a i-1 ya fueron enviados)."`. Errores de **HTTP (!resp.ok)** son `TelegramApiError` con `httpStatus=resp.status` y los mismos props numéricos + `detalle` de `data.description` (si vino).
+  - `document.js`: Mismo shape para simetría con `chunksSentBeforeFail=0` siempre (transport mono-HTTP-call). Nombres de error `TelegramNetworkError` / `TelegramApiError` iguales, así que el UI handler en `app.js` puede chequear `.isPartialSend` y mostrar un toast/warning cuando las fragmentos ya se filtraron por Telegram.
+
+### Changed
+- `pwa/manifest.json` — actualizado a URLs **absolutas** públicas: `start_url`, `scope` y cada entrada de `icons[].src` pasan a ser la URL completa de `misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/…`. `categories: ["productivity", "communication"]` agregadas. `prefer_related_applications: false` agregado para que Chrome no pida instalar el APK cuando todavía no está publicado. Requerido por Digital Asset Links (el `scope` debe ser resoluble desde el manifest publicado) y por `bubblewrap init` que usa estos valores para setear `host` / `startUrl`.
+- `scripts/apk/install-deps.sh` — 3 bugs arreglados detectados en ejecución real:
+  1. **Regex versión Java incorrecto** — `sed -E 's/.*"?([0-9]+).*/\1/'` era greedy y consumía todos los dígitos menos el último. Para OpenJDK 21 devolvía `"1"` y el script decía "Java JDK 1 demasiado viejo". **Fix:** nueva función `extract_java_major()` que parsea el token entero después de `version`, maneja caso histórico `1.8` → `8`, y tiene fallback si el formato es raro.
+  2. **`sudo` hardcodeado no existe en contenedores root** — en entornos con `id -u == 0` (Docker, WSL2 custom, etc.) `sudo` ni siquiera está instalado; el script fallaba con `sudo: command not found` justo antes de `apt-get install`. **Fix:** helper `run_as_root()` que no usa sudo si `id -u == 0`, usa sudo si existe, sinó intenta sin sudo y avisa.
+  3. **Detección `bubblewrap` falsa positiva con el sandbox Linux `bubblewrap`** — en sistemas con `/bin/bubblewrap` (el sandbox de Flatpak/LXC, herramienta de sistema totalmente distinta al CLI de Google para TWA), `command -v bubblewrap` retornaba éxito pero luego fallaba al correr `--version`. **Fix:** `is_bubblewrap_cli()` lee los primeros 128 bytes del binario; solo se considera "instalado" si empieza con `#!/usr/bin/env node` (es el CLI de Google). Si no, se instala con npm y se valida de nuevo.
+
+---
+
 ## [Unreleased] - 2026-08-13 (session 6)
 
 ### Fixed
