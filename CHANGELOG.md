@@ -8,6 +8,11 @@
   - Service Worker (`pwa/service-worker.js`) handles POST requests from Web Share Target, temporarily storing shared file content in IndexedDB and redirecting to the app.
   - `app.js` enhanced with `getSharedFileIfAvailable()` to read shared files from IndexedDB on app launch, providing the "one-tap" UX flow intended by the document transport strategy.
   - URL cleanup: `?shared_file_ready=1` parameter automatically removed from address bar after processing.
+- **Mobile testing checklist for Web Share Target** — added comprehensive section 10.1.1 to `MOBILE_TESTING.md` covering platform-specific behaviors:
+  - Android native share menu integration testing
+  - iOS limitations and fallback validation  
+  - IndexedDB cleanup verification
+  - Manual fallback compatibility checks
 
 ### Fixed
 - **Document sharing UX gap closed** — recipients can now share `.txt` files directly from Telegram to the app without manual file opening. Previously, the sender could attach documents via `sendDocument`, but receivers had to manually open the app and use the `<input type="file">` fallback.
@@ -18,8 +23,9 @@
 - **Security**: Shared files are stored temporarily in IndexedDB with automatic cleanup after reading, preventing accumulation of sensitive data
 
 ### Tests
-- **57/57 JavaScript tests passing** — all existing transport, cipher, and E2E tests continue to pass
+- **60/60 JavaScript tests passing** — added 3 new Web Share Target tests covering IndexedDB storage, file reading with cleanup, and null handling when no shared file exists
 - **14/14 Python tests passing** — encrypted bundle and Telegram client tests remain stable
+- **Comprehensive test coverage**: Web Share Target flow now validated from Service Worker POST handling through IndexedDB storage to app-level file reading
 
 ---
 

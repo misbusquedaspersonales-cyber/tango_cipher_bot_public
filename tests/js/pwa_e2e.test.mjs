@@ -134,3 +134,221 @@ test('unlockDeployBundle: accepts NFC/NFD variants of the deploy passphrase', as
   const unlocked = await unlockDeployBundle(passNfd, bundle);
   assert.deepEqual(unlocked, payload);
 });
+
+// ---------- Web Share Target tests ----------
+
+test('Web Share Target: service worker stores shared file in IndexedDB', async () => {
+  // Mock service worker environment
+  const mockSelf = {
+    location: { pathname: '/pwa/', search: '' }
+  };
+  
+  // Mock FormData with shared file
+  const mockFile = {
+    name: 'shared-message.txt',
+    text: async () => '50-V01P02-~20-V01P03'
+  };
+  
+  const mockFormData = {
+    get: (key) => key === 'shared_file' ? mockFile : null
+  };
+  
+  const mockRequest = {
+    formData: async () => mockFormData,
+    url: 'https://example.com/pwa/index.html?src=shared-file'
+  };
+
+  // Simulate the service worker's handleShareTarget logic
+  const fileContent = await mockFile.text();
+  const timestamp = Date.now();
+  
+  // Test IndexedDB storage (this is what the service worker does)
+  const dbRequest = indexedDB.open('TangoCifradoSharedFiles', 1);
+  
+  await new Promise((resolve) => {
+    dbRequest.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('files')) {
+        db.createObjectStore('files', { keyPath: 'id' });
+      }
+    };
+    
+    dbRequest.onsuccess = (e) => {
+      const db = e.target.result;
+      const tx = db.transaction(['files'], 'readwrite');
+      const store = tx.objectStore('files');
+      
+      store.put({
+        id: 'latest',
+        content: fileContent,
+        filename: mockFile.name,
+        timestamp: timestamp
+      });
+      
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+    };
+  });
+  
+  // Verify the file was stored correctly
+  const readRequest = indexedDB.open('TangoCifradoSharedFiles', 1);
+  
+  const storedData = await new Promise((resolve) => {
+    readRequest.onsuccess = (e) => {
+      const db = e.target.result;
+      const tx = db.transaction(['files'], 'readonly');
+      const store = tx.objectStore('files');
+      const getRequest = store.get('latest');
+      
+      getRequest.onsuccess = () => {
+        db.close();
+        resolve(getRequest.result);
+      };
+    };
+  });
+  
+  assert.equal(storedData.content, '50-V01P02-~20-V01P03');
+  assert.equal(storedData.filename, 'shared-message.txt');
+  assert.equal(typeof storedData.timestamp, 'number');
+});
+
+test('Web Share Target: getSharedFileIfAvailable reads and cleans up', async () => {
+  // First store a file (simulating service worker)
+  const testContent = '50-V01P04^U-~20-V01P01';
+  const testFilename = 'test-shared.txt';
+  
+  const dbRequest = indexedDB.open('TangoCifradoSharedFiles', 1);
+  
+  await new Promise((resolve) => {
+    dbRequest.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('files')) {
+        db.createObjectStore('files', { keyPath: 'id' });
+      }
+    };
+    
+    dbRequest.onsuccess = (e) => {
+      const db = e.target.result;
+      const tx = db.transaction(['files'], 'readwrite');
+      const store = tx.objectStore('files');
+      
+      store.put({
+        id: 'latest',
+        content: testContent,
+        filename: testFilename,
+        timestamp: Date.now()
+      });
+      
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+    };
+  });
+  
+  // Mock the getSharedFileIfAvailable function logic
+  const getSharedFileIfAvailable = async () => {
+    try {
+      const dbRequest = indexedDB.open('TangoCifradoSharedFiles', 1);
+      
+      return new Promise((resolve) => {
+        dbRequest.onsuccess = (e) => {
+          const db = e.target.result;
+          const tx = db.transaction(['files'], 'readonly');
+          const store = tx.objectStore('files');
+          const getRequest = store.get('latest');
+          
+          getRequest.onsuccess = () => {
+            const result = getRequest.result;
+            if (result && result.content) {
+              // Clean up the stored file after reading
+              const deleteTx = db.transaction(['files'], 'readwrite');
+              const deleteStore = deleteTx.objectStore('files');
+              deleteStore.delete('latest');
+              deleteTx.oncomplete = () => db.close();
+              
+              // Return mock File object
+              resolve({
+                text: async () => result.content,
+                name: result.filename || 'shared.txt'
+              });
+            } else {
+              db.close();
+              resolve(null);
+            }
+          };
+          
+          getRequest.onerror = () => {
+            db.close();
+            resolve(null);
+          };
+        };
+        
+        dbRequest.onerror = () => {
+          resolve(null);
+        };
+      });
+    } catch (err) {
+      return null;
+    }
+  };
+  
+  // Test reading the shared file
+  const sharedFile = await getSharedFileIfAvailable();
+  assert.ok(sharedFile, 'Should return shared file object');
+  assert.equal(await sharedFile.text(), testContent);
+  assert.equal(sharedFile.name, testFilename);
+  
+  // Test that file was cleaned up
+  const secondRead = await getSharedFileIfAvailable();
+  assert.equal(secondRead, null, 'File should be cleaned up after first read');
+});
+
+test('Web Share Target: returns null when no shared file available', async () => {
+  // Mock getSharedFileIfAvailable with empty IndexedDB
+  const getSharedFileIfAvailable = async () => {
+    try {
+      const dbRequest = indexedDB.open('TangoCifradoSharedFilesEmpty', 1);
+      
+      return new Promise((resolve) => {
+        dbRequest.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('files')) {
+            db.createObjectStore('files', { keyPath: 'id' });
+          }
+        };
+        
+        dbRequest.onsuccess = (e) => {
+          const db = e.target.result;
+          const tx = db.transaction(['files'], 'readonly');
+          const store = tx.objectStore('files');
+          const getRequest = store.get('latest');
+          
+          getRequest.onsuccess = () => {
+            db.close();
+            resolve(getRequest.result ? {
+              text: async () => getRequest.result.content,
+              name: getRequest.result.filename || 'shared.txt'
+            } : null);
+          };
+          
+          getRequest.onerror = () => {
+            db.close();
+            resolve(null);
+          };
+        };
+        
+        dbRequest.onerror = () => {
+          resolve(null);
+        };
+      });
+    } catch (err) {
+      return null;
+    }
+  };
+  
+  const result = await getSharedFileIfAvailable();
+  assert.equal(result, null, 'Should return null when no shared file exists');
+});

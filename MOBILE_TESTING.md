@@ -213,3 +213,89 @@ Estos dos puntos no son cubiertos por tests automatizados y deben verificarse ma
 4. Apretar Descifrar.
 
 **Resultado esperado:** mensaje de error descriptivo en el status (ej. "Clave enmascarada no es un número: 'esto'"), sin crash, sin pantalla en blanco. La app sigue funcional — se puede limpiar el campo y usar normalmente.
+
+---
+
+## ✅ Checklist de regresión — Fase 10.1.1 (Web Share Target para documentos)
+
+Esta sección valida el flujo completo de compartir archivos .txt desde Telegram usando el menú nativo "Compartir" del sistema operativo. Web Share Target tiene comportamientos específicos por plataforma que requieren verificación en dispositivo real.
+
+### 10.1.1-A. Android: archivo .txt compartido desde Telegram aparece en menú nativo
+
+**Contexto:** `pwa/manifest.json` ahora incluye `share_target` para archivos `text/plain`. Cuando el receptor toca "Compartir" en un archivo .txt en Telegram, el sistema operativo debería mostrar "Tango Cifrado" como una opción en el menú de compartir.
+
+**Setup:**
+- Dispositivo Android con la PWA instalada como standalone app.
+- Dispositivo emisor configurado para enviar via `documentTransport` (mensaje largo >1200 chars).
+
+**Pasos:**
+1. En el emisor: crear un mensaje largo que fuerce `documentTransport` (ej: texto de 2000+ caracteres). Cifrar y enviar a Telegram.
+2. Verificar en Telegram que llegó como archivo adjunto `.txt` (no como mensaje de texto fragmentado).
+3. En el receptor Android: abrir Telegram, ir al chat, ver el archivo adjunto.
+4. **Tap largo** en el archivo .txt para abrir el menú contextual.
+5. Tocar **"Compartir"** (no "Abrir con" - son flujos diferentes).
+6. Observar la lista de apps disponibles para compartir.
+
+**Resultado esperado:**
+- "Tango Cifrado" aparece en la lista de apps (puede estar en un submenu "Ver más" dependiendo del launcher).
+- Al tocar "Tango Cifrado", la PWA se abre en modo standalone.
+- El Service Worker procesa el POST request y almacena el archivo en IndexedDB.
+- La app redirige con `?shared_file_ready=1`.
+- El compositor se abre en modo Descifrar con el ciphertext pre-cargado.
+- Un tap en "Descifrar" muestra el mensaje original completo.
+
+**Resultado problemático / qué reportar si falla:**
+- Si "Tango Cifrado" no aparece en el menú compartir: verificar que el `manifest.json` está siendo servido por el Service Worker y tiene el `share_target` correcto. Reinstalar la PWA puede ser necesario para que Android detecte el nuevo manifest.
+- Si aparece pero al tocarlo abre el browser en lugar de la app standalone: problema con el `action` URL del `share_target` o con la instalación PWA.
+- Si abre la app pero el campo Descifrar está vacío: el Service Worker no está interceptando el POST request o hay error en el almacenamiento IndexedDB.
+
+### 10.1.1-B. iOS: limitaciones conocidas de Web Share Target
+
+**Contexto:** iOS tiene soporte limitado para Web Share Target, especialmente para archivos. El comportamiento puede variar entre versiones de Safari.
+
+**Pasos (iOS 15+):**
+1. Repetir el flujo del punto 10.1.1-A en dispositivo iOS.
+2. En Telegram iOS, intentar compartir el archivo .txt.
+
+**Resultado esperado (puede variar por versión iOS):**
+- iOS 16+: comportamiento similar a Android, "Tango Cifrado" puede aparecer en el menú compartir.
+- iOS 15 y anteriores: Web Share Target para archivos no está soportado. Fallback esperado: el usuario debe usar el flujo manual (abrir la app, usar el botón "Abrir archivo cifrado", seleccionar el archivo descargado).
+
+**Documentar si falla:** 
+- Anotar la versión exacta de iOS y Safari.
+- Confirmar que el fallback manual funciona correctamente.
+- El flujo de deep links (`?c=` para mensajes cortos) debe seguir funcionando normalmente en iOS.
+
+### 10.1.1-C. Limpieza de IndexedDB temporal tras lectura exitosa
+
+**Contexto:** El Service Worker almacena archivos compartidos temporalmente en IndexedDB con la clave `'latest'`. Después de que `getSharedFileIfAvailable()` lee el archivo, debe limpiarlo automáticamente para evitar acumulación de datos sensibles.
+
+**Pasos:**
+1. Completar el flujo 10.1.1-A exitosamente (archivo compartido → app abre → ciphertext pre-cargado → descifrado exitoso).
+2. Force-close completo de la app.
+3. Reabrir la app normalmente (sin compartir nada nuevo).
+4. Verificar que no hay ciphertext pre-cargado en el campo Descifrar.
+
+**Resultado esperado:**
+- La app abre normalmente en modo Cifrar (o último modo usado).
+- No hay texto pre-cargado en ningún campo.
+- El parámetro `?shared_file_ready=1` no aparece en la URL.
+
+**Para debugging avanzado (opcional):**
+- En DevTools → Application → IndexedDB → `TangoCifradoSharedFiles` → `files` object store.
+- Después del paso 1: debe existir un entry con `id: 'latest'`.
+- Después del paso 4: el entry debe haber sido eliminado (`getRequest.result` debería ser undefined).
+
+### 10.1.1-D. Fallback manual sigue funcionando
+
+**Contexto:** El botón "Abrir archivo cifrado" debe seguir funcionando como antes para usuarios que prefieren el flujo manual o en casos donde Web Share Target no funciona.
+
+**Pasos:**
+1. Descargar manualmente un archivo .txt cifrado desde Telegram (tap en el archivo → "Descargar" o "Guardar en archivos").
+2. Abrir la PWA, modo Descifrar.
+3. Tocar **"Abrir archivo cifrado"**.
+4. Seleccionar el archivo descargado desde el file picker del sistema.
+
+**Resultado esperado:**
+- Idéntico al flujo Web Share Target: ciphertext se carga en el campo, descifrado funciona correctamente.
+- Este flujo debe funcionar en todas las plataformas independientemente del soporte de Web Share Target.
