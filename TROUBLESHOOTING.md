@@ -24,6 +24,34 @@
 
 ---
 
+## `bubblewrap build` pregunta "There are changes in twa-manifest.json... apply them?" y después pide `versionName`
+
+### Cuándo aparece
+
+Corriendo `build-apk.sh` (o `bubblewrap build` directo) después de haber editado `twa-manifest.json` a mano, o después de que un script (como `sync-share-target.sh` fuera del caso puntual de `share_target`, o cualquier otro ajuste manual) haya tocado el archivo.
+
+### Por qué pasa
+
+`bubblewrap build` guarda un checksum de `twa-manifest.json` en el momento en que genera el proyecto Android. En cada build posterior, compara ese checksum contra el archivo actual — si no coincide, entiende que hubo cambios manuales y pregunta si querés aplicarlos antes de compilar. Decir que sí dispara, por dentro, el equivalente de `bubblewrap update`, que por defecto bumpea la versión de la app y pide un `versionName` nuevo.
+
+**Esto es distinto y no está cubierto por `sync-share-target.sh`.** Ese script solo evita el prompt/bump de versión en un caso puntual: cuando el cambio detectado es específicamente `share_target` (usa `bubblewrap update --skipVersionUpgrade` para ese caso). Cualquier otro cambio a `twa-manifest.json` — manual o de otro script — sigue disparando este prompt, porque `--skipVersionUpgrade` **solo existe en el comando `bubblewrap update`, no en `bubblewrap build`**. No hay forma de suprimirlo únicamente con flags de `build`.
+
+### Qué responder
+
+1. `Would you like to apply them...?` → **Yes**.
+
+2. `versionName for the new App version:` → cualquier string mayor al `versionName` actual de `twa-manifest.json` (ver el campo `"versionName"` del archivo). Seguir el esquema `MAJOR.MINOR.PATCH` ya usado en el proyecto — por ejemplo, si el actual es `1.3.3`, poner `1.3.4`.
+
+Después de confirmar la versión, el build sigue normalmente sin más prompts.
+
+### ¿Se puede automatizar para que no pregunte nunca?
+
+Sí, agregando un paso a `build-apk.sh` que corra `bubblewrap update --skipVersionUpgrade` de forma proactiva antes de `bubblewrap build` en cada ejecución — así el checksum queda "asentado" y `build` nunca encuentra drift que preguntar.
+
+**A propósito, no se hizo.** El historial de este proyecto tiene dos bugs (`TO_FIX.md` M-4 y M-5) causados exactamente por cambios de versión o configuración de `twa-manifest.json` aplicándose en silencio sin que nadie los revisara. Este prompt ocasional, aunque interrumpe el build, funciona como una salvaguarda barata: obliga a mirar y confirmar antes de firmar un APK con una config distinta a la esperada. Si en algún momento se automatiza (por ejemplo, para que corra en CI sin supervisión humana), asegurarse de que el pipeline valide la versión resultante *después* del build (como ya hace el paso de verificación con `pyaxmlparser` en `REBUILD_APK.md`), no solo confiar en que el bump automático fue el esperado.
+
+---
+
 ## Problema 1: No tengo el CHAT_ID de Telegram
 
 ### Paso 1: Inicia una conversación con tu bot
