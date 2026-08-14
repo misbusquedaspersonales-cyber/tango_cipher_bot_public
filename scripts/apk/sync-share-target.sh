@@ -38,6 +38,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 APK_DIR="${1:-$PWD}"
 
+# --- Guardia de seguridad post-M-5 ------------------------------------------
+# Se descubrió que shareTarget en twa-manifest.json genera intent-filters
+# (android.intent.action.SEND/SEND_MULTIPLE) que rompen la instalación en
+# ciertos dispositivos Android ("There was a problem parsing the package").
+# La causa raíz sigue sin identificarse (ver TO_FIX.md M-5). Mientras tanto,
+# este script NUNCA vuelve a agregar shareTarget automáticamente aunque
+# pwa/manifest.json lo tenga -- eso sería reintroducir el bug en silencio en
+# cualquier build normal. Sí puede seguir QUITÁNDOLO si hiciera falta (esa
+# dirección es segura). Para retomar la investigación de M-5 a propósito:
+#   ALLOW_SHARE_TARGET=1 ../scripts/apk/sync-share-target.sh
+ALLOW_SHARE_TARGET="${ALLOW_SHARE_TARGET:-0}"
+
 PWA_MANIFEST="$REPO_ROOT/pwa/manifest.json"
 TWA_MANIFEST="$APK_DIR/twa-manifest.json"
 
@@ -61,11 +73,12 @@ fi
 CHANGED_FLAG="$(mktemp)"
 trap 'rm -f "$CHANGED_FLAG"' EXIT
 
-python3 - "$PWA_MANIFEST" "$TWA_MANIFEST" "$CHANGED_FLAG" <<'PYEOF'
+python3 - "$PWA_MANIFEST" "$TWA_MANIFEST" "$CHANGED_FLAG" "$ALLOW_SHARE_TARGET" <<'PYEOF'
 import json
 import sys
 
-pwa_path, twa_path, flag_path = sys.argv[1:4]
+pwa_path, twa_path, flag_path, allow_share_target = sys.argv[1:5]
+allow_share_target = allow_share_target == "1"
 
 with open(pwa_path) as f:
     pwa = json.load(f)
@@ -86,9 +99,16 @@ else:
     # camelCase `shareTarget` -- ver TwaManifest.verifyShareTarget en el
     # código fuente de bubblewrap, que copia share_target casi tal cual
     # (solo resuelve `action` a una URL absoluta, y la nuestra ya lo es).
-    if twa_share != pwa_share:
+    if twa_share != pwa_share and (twa_share is not None or allow_share_target):
+        # twa_share is not None -> ya estaba habilitado, solo actualiza el
+        # contenido (dirección segura). twa_share is None -> lo estamos
+        # AGREGANDO por primera vez; solo permitido con ALLOW_SHARE_TARGET=1.
         twa["shareTarget"] = pwa_share
         changed = True
+    elif twa_share is None and pwa_share is not None and not allow_share_target:
+        print("⚠️  pwa/manifest.json tiene share_target pero twa-manifest.json no "
+              "(removido a propósito, ver TO_FIX.md M-5). NO se re-agrega automáticamente. "
+              "Usá ALLOW_SHARE_TARGET=1 si esto es intencional.", file=sys.stderr)
 
 if changed:
     with open(twa_path, "w") as f:
