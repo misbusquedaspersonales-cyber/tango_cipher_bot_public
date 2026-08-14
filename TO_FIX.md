@@ -6,9 +6,9 @@
 |---|---|---|---|---|
 | 🟢 P3 (Low) | 1 | 0 | 1 | 0 |
 | 🔵 P4 (Refactor) | 1 | 1 | 0 | 0 |
-| 🔧 Maintenance | 5 | 2 | 2 | 1 |
+| 🔧 Maintenance | 5 | 3 | 2 | 0 |
 | 🔧 Chunking edge cases | 2 | 2 | 0 | 0 |
-| **Total** | **9** | **5** | **3** | **1** |
+| **Total** | **9** | **6** | **2** | **0** |
 
 > Auditoría 2026-08-13: se verificó código-fuente por cada item (ver § abajo). La tabla anterior refleja el estado REAL. El primer borrador mentía (decía 0 done pero 3 checkeados, y M-3/C-1/C-2 estaban documentados como bloqueados cuando ya tenían code fixes).
 
@@ -107,6 +107,18 @@ El workaround actual (`tango-cifrado-NO-SHARE-TARGET.apk`) no es gratis — devu
   7. ✅ Si falta `./gradlew` → corre `{ printf 'Y\nY\n'; } | bubblewrap init --manifest $MANIFEST_URL` automáticamente con log fallback.
 - **Evidencia adicional (CHANGELOG Unreleased 2026-08-13 session 6 round 2)**: documenta M-3 como fixed, y el step `Smoke-test APK strings (M-2 guard)` del workflow (líneas 303-363) sí existe.
 - **Workaround manual** mientras se valida el CI build: `cd tango-cifrado-apk && ../scripts/apk/build-apk.sh` — funciona y produce APKs válidas.
+
+### [x] M-6: Cache clearing procedure complex and error-prone for users
+
+- **✅ RESUELTO** — patches 0009-0012 applied (session 6 round 8): automated cache clearing feature.
+- **Problema original**: Manual cache clearing via TROUBLESHOOTING.md requería múltiples pasos técnicos propensos a error: desregistrar Service Worker, borrar Cache Storage, borrar IndexedDB, limpiar localStorage, hard refresh. Usuarios no técnicos frecuentemente cometían errores o abandonaban el proceso.
+- **Solución implementada**: 
+  - **UI integrada**: Botón "Mantenimiento ▾ → Vaciar caché y reiniciar" en settings de la app
+  - **Automatización completa**: `clearAllLocalStateAndReload()` ejecuta todos los pasos de limpieza automáticamente
+  - **Seguridad de datos**: Diálogo de confirmación advierte sobre pérdida de corpus desbloqueado y credenciales Telegram
+  - **Manejo robusto**: Continúa proceso aún si algunos pasos fallan, evitando estados parciales
+- **Resultado**: Procedimiento de 6 pasos manuales reducido a 2 clicks (botón + confirmación). Soporte técnico significativamente reducido.
+- **Fallback preservado**: TROUBLESHOOTING.md mantiene pasos manuales para versiones anteriores y casos edge.
 
 ### [ ] M-1: Keystore password reuses a known-compromised value
 

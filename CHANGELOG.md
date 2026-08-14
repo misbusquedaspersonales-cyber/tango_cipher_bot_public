@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## [Unreleased] - 2026-08-14 (session 6 round 8 — Cache clearing maintenance feature)
+
+### Added
+- **Automated cache clearing feature** — comprehensive maintenance tool that automates the complex manual troubleshooting procedure:
+  - **UI Component**: Collapsible "Mantenimiento ▾" section in settings with "Vaciar caché y reiniciar" button
+  - **Core functionality**: `clearAllLocalStateAndReload()` performs complete cleanup:
+    - Unregisters all Service Workers
+    - Deletes all Cache Storage buckets (shell/bundle/runtime, any CACHE_VERSION)
+    - Deletes both IndexedDB databases ('tango-cifrado-vault', 'TangoCifradoSharedFiles')
+    - Clears localStorage completely
+    - Forces reload with HTTP cache bypass (`?_reset=` timestamp)
+  - **User safety**: Confirmation dialog warns about data loss (corpus + Telegram credentials)
+  - **Error handling**: Graceful degradation - collects errors but continues cleanup process
+- **Updated troubleshooting documentation** — added prominent "try this first" section pointing to automated button, reducing support burden
+
+### Technical Details
+- **Integration**: `initMaintenance()` wired into initialization sequence after `initSecuritySettings()`
+- **Cache bypass**: Uses timestamp parameter to force fresh reload, bypassing browser HTTP cache
+- **Database cleanup**: Handles IndexedDB deletion with proper error handling for blocked/busy databases
+- **Backward compatibility**: Manual troubleshooting procedures remain as fallback for older app versions
+
+---
+
 ## [Unreleased] - 2026-08-14 (session 6 round 7 — Web Share Target installation incompatibility discovery)
 
 ### Fixed
