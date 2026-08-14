@@ -102,6 +102,13 @@ git push
 
 ### Paso 4 — Buildear el APK
 
+> ⚠️ **Web Share Target deshabilitado a propósito.** `twa-manifest.json` actual
+> (versionCode 7 / 1.3.3) no incluye `shareTarget` — los intent-filters de
+> `SEND`/`SEND_MULTIPLE` causaban fallos de instalación en ciertos dispositivos
+> Android ("There was a problem parsing the package"). El APK resultante no
+> aparece en el menú nativo "Compartir"; los receptores usan el flujo manual
+> (`<input type="file">`). Detalle y causa raíz (aún sin identificar): `TO_FIX.md` M-5.
+
 ```bash
 cd tango-cifrado-apk
 KEYSTORE_FILE=~/tango-signing/android.keystore \

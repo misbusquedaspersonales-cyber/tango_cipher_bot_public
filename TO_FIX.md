@@ -56,9 +56,19 @@
 - **Mitigación actual**: APK compilado sin `shareTarget` (`tango-cifrado-NO-SHARE-TARGET.apk`) instala correctamente
 - **Estado**: **Funcional básico** (APK instala), **Web Share Target bloqueado** (requiere investigación adicional)
 - **Próximos pasos**: 
-  1. Investigar compatibilidad Android + TWA + Web Share Target
-  2. Probar intent-filter alternativo o configuración Bubblewrap
-  3. Considerar APK dual: básico (sin share target) + experimental (con share target)
+  1. **Capturar el dato que falta**: la investigación actual comparó dos APKs (con/sin `shareTarget`) pero nunca miró `adb logcat` en el momento exacto de la instalación fallida. Sin ese log, "causa raíz verificada" en realidad significa "correlación verificada, causa desconocida". Repetir la instalación del APK CON `shareTarget` en un dispositivo que falla, con `adb logcat | grep -i "PackageParser\|parseBaseApk"` corriendo en paralelo, es el primer paso — probablemente el único que realmente acota las 3 hipótesis de abajo a una.
+  2. Probar intent-filter alternativo o configuración Bubblewrap (versión de `@bubblewrap/cli` distinta — la actual coincide con la que introdujo `compileSdkVersion 36`; podría ser el mismo tipo de drift de versión que causó M-4, no un problema de Web Share Target en sí).
+  3. Probar en un tercer dispositivo/versión de Android distinto a los dos usados en la comparación original — con solo 2 dispositivos no se puede distinguir "todos los Android fallan" de "este modelo/versión puntual falla".
+  4. Considerar APK dual: básico (sin share target) + experimental (con share target), para no bloquear la distribución mientras se investiga.
+
+#### ¿Por qué vale la pena reintentarlo, y no dejarlo como estaba?
+
+El workaround actual (`tango-cifrado-NO-SHARE-TARGET.apk`) no es gratis — devuelve al receptor exactamente al flujo manual que Fase 10.1.1 se propuso eliminar:
+
+- **La razón por la que existe `sendDocument`/Web Share Target en primer lugar**: los mensajes cifrados largos (>1200 chars) se mandan como archivo `.txt` adjunto porque el deep-link de texto no entra en el límite de Telegram. Sin Share Target, el receptor tiene que: guardar el archivo manualmente desde Telegram, abrir la app aparte, tocar "Abrir archivo cifrado", y buscar el archivo en el almacenamiento — cuatro pasos manuales en vez de un tap en "Compartir". Para un destinatario no técnico (el caso de uso real de esta app), cada paso manual es una oportunidad de error o de abandono.
+- **Es la única pieza de la Fase 10.1.1 que quedó a medio camino.** Todo el resto — `sendDocument`, `selectTransport`, el pipeline de recepción, el fallback manual — está implementado, probado (53/53 JS) y funcionando en producción. Web Share Target es la última pieza para que el flujo completo sea "un tap" de punta a punta, tal como está descripto en el propio `ROADMAP.md` y `README.md`.
+- **El fallback manual seguirá existiendo aunque se resuelva esto** — no hay riesgo de regresión al reintentar: si Web Share Target vuelve a fallar, el peor caso es quedar exactamente donde está hoy.
+- **La causa raíz sigue sin identificarse**, lo cual es distinto de "confirmado incompatible". Es enteramente posible que el problema no sea Web Share Target en sí, sino un artefacto del mismo tipo de drift de configuración que ya causó M-4 (versión de Bubblewrap/SDK no pineada, generando intent-filters o metadata inconsistente entre builds). Si ese es el caso, la solución podría ser tan simple como pinear la versión de `@bubblewrap/cli` — no un problema arquitectónico de fondo.
 
 ### [ ] M-4: APK version desynchronization on clean builds
 
