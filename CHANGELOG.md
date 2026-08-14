@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [Unreleased] - 2026-08-14 (session 6 round 9 — Final safety guard and patches completion)
+
+### Added
+- **Critical safety guard** (patch 0013) — prevents silent reintroduction of Web Share Target installation bug:
+  - **ALLOW_SHARE_TARGET environment variable**: `sync-share-target.sh` now requires explicit `ALLOW_SHARE_TARGET=1` to add Web Share Target
+  - **Default safety mode**: Script warns but refuses to automatically copy `share_target` from PWA to APK manifest  
+  - **Investigative override**: Researchers can still enable Web Share Target intentionally with environment variable
+  - **Clear user feedback**: Shows warning referencing TO_FIX.md M-5 when refusing to sync
+
+### Changed
+- **APK build protection**: NO-SHARE-TARGET state now protected against accidental reversion during normal builds
+- **Version management**: APK updated to versionCode=8, versionName=1.3.4 without Web Share Target
+
+### Technical Details
+- **Safety mechanism**: Three-way logic handles adding (blocked by default), updating (always allowed), and removing (always allowed)
+- **Investigation pathway preserved**: `ALLOW_SHARE_TARGET=1` override maintains ability to investigate M-5 root cause
+- **Build process integration**: Safety guard runs automatically during `build-apk.sh` execution
+
+---
+
 ## [Unreleased] - 2026-08-14 (session 6 round 8 — Cache clearing maintenance feature)
 
 ### Added
