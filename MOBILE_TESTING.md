@@ -1,5 +1,26 @@
 # MOBILE_TESTING.md — Probar la PWA como app móvil de verdad
 
+## ⚠️ **IMPORTANTE: Web Share Target Compatibilidad**
+
+**Nota crítica**: Se descubrió que las APK con Web Share Target (`shareTarget` en twa-manifest.json) causan fallos de instalación en ciertos dispositivos Android. 
+
+**APK recomendado para testing**: `tango-cifrado-NO-SHARE-TARGET.apk`
+- ✅ Instalación verificada exitosa
+- ❌ **NO incluye** Web Share Target (sin menú "Compartir" nativo)  
+- ✅ Funcionalidad completa: cifrado, descifrado, envío Telegram
+- ✅ Fallback manual: `<input type="file">` funciona normalmente
+
+**Limitación conocida**: Los usuarios deben usar flujo manual para recibir archivos .txt:
+1. Descargar archivo .txt desde Telegram
+2. Abrir Tango Cifrado APK  
+3. Tocar botón "📁 Seleccionar archivo"
+4. Navegar a Descargas → seleccionar archivo .txt
+5. La app descifra automáticamente
+
+**Para desarrollo futuro**: Investigar compatibilidad Web Share Target + TWA + versiones Android específicas.
+
+---
+
 Esta guía cubre cómo llevar la PWA de "archivos en una carpeta" a "app
 instalada en tu celular". La **primera sección** explica cómo instalar; la
 **segunda sección** (checklist) es específica para cada release y debe

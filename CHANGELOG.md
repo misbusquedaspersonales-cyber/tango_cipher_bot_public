@@ -1,6 +1,27 @@
 # CHANGELOG
 
-## [Unreleased] - 2026-08-14 (session 6 round 7 — APK version synchronization fix)
+## [Unreleased] - 2026-08-14 (session 6 round 7 — Web Share Target installation incompatibility discovery)
+
+### Fixed
+- **CRITICAL: APK installation failure root cause identified and resolved** — Web Share Target intent-filters cause installation failures on certain Android devices:
+  - **Investigation methodology**: Compared failing APK (versionCode=6) against old working APK (versionCode=2) from `/root/JOB-sda2/CIFRADO-TANGOS/TANDA-2-tangoExtra/Tango-00/`
+  - **Root cause discovered**: Old working APK had NO Web Share Target intent-filters, current failing APK had `android.intent.action.SEND` + `SEND_MULTIPLE` 
+  - **Solution verified**: APK compiled without `shareTarget` section in `twa-manifest.json` installs successfully
+  - **Test APK created**: `tango-cifrado-NO-SHARE-TARGET.apk` (versionCode=7, versionName=1.3.3) — installation verified successful
+- **APK version synchronization** — also resolved M-4 desync issue during investigation: manual correction of `app/build.gradle` versions to match `twa-manifest.json`
+
+### Changed
+- **Mobile testing priority updated** — documented Web Share Target incompatibility as critical installation blocker in `MOBILE_TESTING.md`, `TROUBLESHOOTING.md`, and `TO_FIX.md M-5`
+- **Fallback flow emphasized** — users must use manual file input (`<input type="file">`) instead of native Android "Share" menu for receiving .txt files from Telegram
+
+### Technical Details
+- **Web Share Target limitation identified**: Generated Android intent-filters appear incompatible with certain Android device/version combinations when used in TWAs
+- **Functional workaround**: APK without Web Share Target provides full functionality (encrypt, decrypt, send to Telegram) except native sharing integration
+- **Investigation needed**: Determine if issue is Android version compatibility, Bubblewrap configuration error, or TWA + Web Share Target architectural conflict
+
+---
+
+## [Unreleased] - 2026-08-14 (session 6 round 6 — APK version synchronization fix)
 
 ### Fixed
 - **Critical APK version desynchronization resolved** — `twa-manifest.json` contained versionCode=4, versionName="1.3.0", targetSdkVersion=34 but the compiled APK had versionCode=1, versionName="", targetSdkVersion=36:

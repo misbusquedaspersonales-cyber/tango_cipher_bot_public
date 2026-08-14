@@ -1,8 +1,28 @@
 # TROUBLESHOOTING
 
-> **Actualizado 2026-08-13**: problemas resueltos marcados como ✅ RESUELTO con referencias históricas. Para issues de prioridad media/baja y mejoras no bloqueantes, consultá [TO_FIX.md](TO_FIX.md).
+> **Actualizado 2026-08-14**: problemas resueltos marcados como ✅ RESUELTO con referencias históricas. Para issues de prioridad media/baja y mejoras no bloqueantes, consultá [TO_FIX.md](TO_FIX.md).
 
 > Nota: si querés revisar los problemas pendientes y los items de mejora no bloqueantes, consultá [TO_FIX.md](TO_FIX.md). Allí se mantiene el seguimiento de los issues de prioridad media/baja que no afectan el uso normal de la app.
+
+## 🚨 **Problema crítico: APK con Web Share Target no instala en ciertos dispositivos Android**
+
+**Síntomas**: El APK descarga correctamente pero falla al instalar con error genérico de instalación.
+
+**Causa raíz**: Los intent-filters de Web Share Target (`android.intent.action.SEND` + `SEND_MULTIPLE`) generados automáticamente por Bubblewrap causan conflictos de instalación en ciertos dispositivos/versiones Android.
+
+**Solución verificada**: Usar APK compilado sin Web Share Target:
+1. En `tango-cifrado-apk/twa-manifest.json`, remover completamente la sección `shareTarget`
+2. Ejecutar `bubblewrap update --skipVersionUpgrade` 
+3. Corregir manualmente versiones en `app/build.gradle` (ver M-4 en TO_FIX.md)
+4. Compilar con `bubblewrap build`
+
+**APK funcional disponible**: `tango-cifrado-NO-SHARE-TARGET.apk` (sin Web Share Target, instalación exitosa verificada)
+
+**Limitación**: Sin Web Share Target, los usuarios no pueden compartir archivos `.txt` desde Telegram directamente con la app usando el menú "Compartir" nativo. Deben usar el flujo manual: abrir app → botón file input → seleccionar archivo descargado.
+
+**Investigación pendiente**: Determinar si es incompatibilidad Android/TWA, error de configuración Bubblewrap, o requisito de versión mínima Android para Web Share Target en TWAs.
+
+---
 
 ## Problema 1: No tengo el CHAT_ID de Telegram
 

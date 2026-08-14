@@ -6,9 +6,9 @@
 |---|---|---|---|---|
 | 🟢 P3 (Low) | 1 | 0 | 1 | 0 |
 | 🔵 P4 (Refactor) | 1 | 1 | 0 | 0 |
-| 🔧 Maintenance | 4 | 2 | 1 | 1 |
+| 🔧 Maintenance | 5 | 2 | 2 | 1 |
 | 🔧 Chunking edge cases | 2 | 2 | 0 | 0 |
-| **Total** | **8** | **5** | **2** | **1** |
+| **Total** | **9** | **5** | **3** | **1** |
 
 > Auditoría 2026-08-13: se verificó código-fuente por cada item (ver § abajo). La tabla anterior refleja el estado REAL. El primer borrador mentía (decía 0 done pero 3 checkeados, y M-3/C-1/C-2 estaban documentados como bloqueados cuando ya tenían code fixes).
 
@@ -39,6 +39,26 @@
 ---
 
 ## 🔧 Maintenance
+
+### [ ] M-5: Web Share Target intent-filters cause APK installation failure
+
+- **🔄 DESCUBIERTO Y MITIGADO** — session 6 round 7: la causa raíz de los fallos de instalación de APK identificada.
+- **Problema**: APKs con Web Share Target (`shareTarget` en `twa-manifest.json`) generan intent-filters `android.intent.action.SEND` + `SEND_MULTIPLE` que causan fallos de instalación en ciertos dispositivos Android.
+- **Evidencia comparativa**:
+  - ✅ APK sin Web Share Target (versionCode=2, old working): instalación exitosa
+  - ❌ APK con Web Share Target (versionCode=6, recent): fallo de instalación  
+  - ✅ APK sin Web Share Target (versionCode=7, test): instalación exitosa
+- **Root cause verificado**: Al comparar con versión working anterior, el único cambio significativo fueron los intent-filters de Web Share Target en AndroidManifest.xml
+- **Posibles causas técnicas**:
+  - Incompatibilidad de versión Android del dispositivo con Web Share Target TWA
+  - Error de configuración en intent-filters generados por Bubblewrap
+  - Conflicto TWA + Web Share Target en el sistema de intents Android
+- **Mitigación actual**: APK compilado sin `shareTarget` (`tango-cifrado-NO-SHARE-TARGET.apk`) instala correctamente
+- **Estado**: **Funcional básico** (APK instala), **Web Share Target bloqueado** (requiere investigación adicional)
+- **Próximos pasos**: 
+  1. Investigar compatibilidad Android + TWA + Web Share Target
+  2. Probar intent-filter alternativo o configuración Bubblewrap
+  3. Considerar APK dual: básico (sin share target) + experimental (con share target)
 
 ### [ ] M-4: APK version desynchronization on clean builds
 
