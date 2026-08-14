@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## [Unreleased] - 2026-08-14 (session 6 round 7 — APK version synchronization fix)
+
+### Fixed
+- **Critical APK version desynchronization resolved** — `twa-manifest.json` contained versionCode=4, versionName="1.3.0", targetSdkVersion=34 but the compiled APK had versionCode=1, versionName="", targetSdkVersion=36:
+  - **Root cause identified**: `bubblewrap init` (triggered when `./gradlew` is missing) regenerates from web manifest which lacks Android-specific version fields, overwriting existing `twa-manifest.json` values with defaults (versionCode=1, versionName="", latest SDK version from bubblewrap installation).
+  - **Solution applied**: Force-regenerated Android project and manually synchronized `app/build.gradle` with correct values from `twa-manifest.json`.
+  - **Verification**: Final APK now correctly shows versionCode='4', versionName='1.3.0' via `aapt2 dump badging`.
+  - **Web Share Target confirmed functional**: Intent-filters for `android.intent.action.SEND` + `SEND_MULTIPLE` verified present in compiled APK.
+
+### Technical Details
+- **Version mismatch detection**: Used `aapt2 dump badging` to verify actual compiled APK metadata vs source configuration files.
+- **Build path cleanup**: Removed generated Android project files and forced clean regeneration via `bubblewrap update` + manual `build.gradle` edit.
+- **Final APK ready**: `/root/JOB-sda2/CIFRADO-TANGOS/Tango/dist/apk/app-release-signed.apk` contains synchronized versions and working Web Share Target.
+
+---
+
 ## [Unreleased] - 2026-08-13 (session 6 round 6 — APK Web Share Target patches integration)
 
 ### Fixed
