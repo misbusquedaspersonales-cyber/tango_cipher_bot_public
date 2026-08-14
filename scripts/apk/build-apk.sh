@@ -59,6 +59,17 @@ if [ -z "${KEYSTORE_PASS:-}" ]; then
   fi
 fi
 
+# bubblewrap NO lee KEYSTORE_PASS (nombre inventado por este script) -- solo
+# reconoce BUBBLEWRAP_KEYSTORE_PASSWORD y BUBBLEWRAP_KEY_PASSWORD para saltear
+# el prompt interactivo de "Password for the Key Store" / "Password for the
+# Key". Sin esto, `bubblewrap build` pregunta a mano SIEMPRE, sin importar
+# que KEYSTORE_PASS ya esté resuelto acá arriba. KEYSTORE_KEY_PASS es
+# opcional -- si no se seteó, usamos el mismo valor que la keystore
+# (comportamiento por defecto de generate-keystore.sh: key password = store
+# password salvo que se haya generado distinto a propósito).
+export BUBBLEWRAP_KEYSTORE_PASSWORD="$KEYSTORE_PASS"
+export BUBBLEWRAP_KEY_PASSWORD="${KEYSTORE_KEY_PASS:-$KEYSTORE_PASS}"
+
 # Prefer ~/tango-signing/keystore-password.txt for PASS_FILE interactive fallback
 if [ -f "$HOME/tango-signing/keystore-password.txt" ]; then
   PASS_FILE="$HOME/tango-signing/keystore-password.txt"
