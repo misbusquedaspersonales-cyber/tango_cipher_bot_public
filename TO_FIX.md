@@ -6,9 +6,9 @@
 |---|---|---|---|---|
 | 🟢 P3 (Low) | 1 | 0 | 1 | 0 |
 | 🔵 P4 (Refactor) | 1 | 1 | 0 | 0 |
-| 🔧 Maintenance | 3 | 2 | 0 | 1 |
+| 🔧 Maintenance | 4 | 2 | 1 | 1 |
 | 🔧 Chunking edge cases | 2 | 2 | 0 | 0 |
-| **Total** | **7** | **5** | **1** | **1** |
+| **Total** | **8** | **5** | **2** | **1** |
 
 > Auditoría 2026-08-13: se verificó código-fuente por cada item (ver § abajo). La tabla anterior refleja el estado REAL. El primer borrador mentía (decía 0 done pero 3 checkeados, y M-3/C-1/C-2 estaban documentados como bloqueados cuando ya tenían code fixes).
 
@@ -39,6 +39,29 @@
 ---
 
 ## 🔧 Maintenance
+
+### [ ] M-4: APK version desynchronization on clean builds
+
+- **🔄 PARCIALMENTE RESUELTO** — fix manual aplicado (session 6 round 7), pero queda brecha de automatización.
+- **Problema**: Cuando falta `./gradlew` (CI, clean checkout), `build-apk.sh` dispara `bubblewrap init --manifest $URL`, que:
+  1. Lee PWA `manifest.json` (carece de campos version Android-específicos)  
+  2. Sobrescribe `twa-manifest.json` existente con defaults: versionCode=1, versionName="", targetSdkVersion=latest
+  3. Ignora valores configurados: versionCode=4, versionName="1.3.0", targetSdkVersion=34
+- **Estado actual**:
+  - ✅ Fix manual aplicado: `app/build.gradle` sincronizado manualmente con valores `twa-manifest.json`
+  - ✅ APK verificado: APK final tiene versionCode='4', versionName='1.3.0' correcto
+  - ❌ Brecha identificada: `build-apk.sh` solo **detecta** `twa-manifest.json` faltante, no **verifica/corrige** sync de versiones
+- **Brecha de automatización**: El script dice tener "version synchronization guards" pero solo corre:
+  ```bash
+  bubblewrap init --manifest="$URL"  # Sobrescribe versiones con defaults
+  sync-share-target.sh              # Sincroniza share_target, NO versiones
+  ```
+- **Riesgo de próxima ocurrencia**: **Alto** — cualquier build limpio (CI sin cache `./gradlew`, clone fresco) disparará la misma desincronización
+- **Opciones de solución**:
+  1. **Version sync en build-apk.sh** — después de `bubblewrap init`, leer versiones `twa-manifest.json` y patchear `app/build.gradle`
+  2. **Init guard** — detectar cuando `bubblewrap init` va a sobrescribir versiones, backup/restore
+  3. **CI persistence** — asegurar que CI cachee `./gradlew` para evitar trigger del path `init`
+- **Prioridad**: **Media** — no bloquea distribución actual, pero causará confusión en próximo build limpio
 
 ### [x] M-3: CI APK build fails with bubblewrap interactive prompts — complex multi-stage issue
 
