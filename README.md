@@ -8,7 +8,7 @@ El corpus y el SALT nunca viajan en texto plano: GitHub Actions los cifra con AE
 
 **Envío de mensajes largos:** Los ciphertexts largos (>1200 chars) se envían automáticamente como archivos `.txt` adjuntos vía `sendDocument` de Telegram. Los receptores pueden usar el fallback manual `<input type="file">` para cargar archivos descargados.
 
-**Limitación conocida:** Web Share Target (menú nativo "Compartir" de Android) causa fallos de instalación en ciertos dispositivos. La APK recomendada (`tango-cifrado-NO-SHARE-TARGET.apk`) no incluye esta funcionalidad pero instala correctamente y proporciona funcionalidad completa vía flujo manual.
+**Limitación conocida:** Web Share Target (menú nativo "Compartir" de Android) causa fallos de instalación en ciertos dispositivos. La APK recomendada (`tango-cifrado-NO-SHARE-TARGET.apk`) no incluye esta funcionalidad pero instala correctamente y proporciona funcionalidad completa vía flujo manual — a costa de 4 pasos manuales en vez de 1 tap para el receptor. Ver `TO_FIX.md` M-5, sección "¿Por qué vale la pena reintentarlo?", para el detalle de ese costo y por qué no se descarta recuperarla.
 
 **PWA en Vivo:** [tango_cipher_bot_public/pwa](https://misbusquedaspersonales-cyber.github.io/tango_cipher_bot_public/pwa/index.html)
 
@@ -180,7 +180,7 @@ cd tango-cifrado-apk
 # Pasar dist/apk/app-release-signed.apk al teléfono e instalar
 ```
 
-**Web Share Target**: El APK incluye intent-filters nativos que permiten compartir archivos `.txt` desde Telegram directamente con la app usando el menú "Compartir" de Android. El script `sync-share-target.sh` se ejecuta automáticamente en cada build para mantener sincronizado el `share_target` de la PWA con el `shareTarget` del APK.
+**Web Share Target**: ⚠️ deshabilitado en el APK actual — ver "Limitación conocida" más arriba y `TO_FIX.md` M-5. El script `sync-share-target.sh` corre en cada build pero, desde el fix de M-5, ya no reactiva `shareTarget` automáticamente aunque la PWA lo tenga (evita reintroducir el bug de instalación en silencio). Para compilar la variante experimental con Share Target y ayudar a diagnosticar la causa raíz: `ALLOW_SHARE_TARGET=1 ../scripts/apk/build-apk.sh`.
 
 ### Opción alternativa: PWA vía Chrome  
 

@@ -48,7 +48,59 @@ Después de confirmar la versión, el build sigue normalmente sin más prompts.
 
 Sí, agregando un paso a `build-apk.sh` que corra `bubblewrap update --skipVersionUpgrade` de forma proactiva antes de `bubblewrap build` en cada ejecución — así el checksum queda "asentado" y `build` nunca encuentra drift que preguntar.
 
-**A propósito, no se hizo.** El historial de este proyecto tiene dos bugs (`TO_FIX.md` M-4 y M-5) causados exactamente por cambios de versión o configuración de `twa-manifest.json` aplicándose en silencio sin que nadie los revisara. Este prompt ocasional, aunque interrumpe el build, funciona como una salvaguarda barata: obliga a mirar y confirmar antes de firmar un APK con una config distinta a la esperada. Si en algún momento se automatiza (por ejemplo, para que corra en CI sin supervisión humana), asegurarse de que el pipeline valide la versión resultante *después* del build (como ya hace el paso de verificación con `pyaxmlparser` en `REBUILD_APK.md`), no solo confiar en que el bump automático fue el esperado.
+**A propósito, no se hizo.** El historial de este proyecto tiene dos bugs (`TO_FIX.md` M-4 y M-5) causados exactamente por cambios de versión o configuración de `twa-manifest.json` aplicándose en silencio sin que nadie los revisara. Este prompt ocasional, aunque interrumpe el build, funciona como una salvaguarda barata: obliga a mirar y confirmar antes de firmar un APK con una config distinta a la esperada. Si en algún momento se automatiza (por ejemplo, para que corra en CI sin supervisión humana), asegurarse de que el pipeline valide la versión resultante *después* del build (como ya hace el paso de verificación con `pyaxmlparser`), no solo confiar en que el bump automático fue el esperado.
+
+----
+
+## Monitorear la guardia de seguridad durante `build-apk.sh`
+
+### Qué mirar en la salida del build
+
+Durante la ejecución de `build-apk.sh`, **prestá atención a estos mensajes** que indican si la guardia de seguridad funciona:
+
+#### ✅ **Guardia funcionando correctamente (esperado):**
+```
+⚠️  pwa/manifest.json tiene share_target pero twa-manifest.json no
+(removido a propósito, ver TO_FIX.md M-5). NO se re-agrega
+automáticamente. Usá ALLOW_SHARE_TARGET=1 si esto es intencional.
+✅ share_target ya está sincronizado en twa-manifest.json -- nada que regenerar.
+```
+
+Esa línea confirma que el freno de seguridad está funcionando y no reintroducirá Web Share Target por accidente.
+
+#### ⛔ **PELIGRO: Guardia NO funcionando (detener build):**
+```
+Proyecto Android regenerado con el share_target actual
+```
+```
+Running: bubblewrap update
+```
+
+Si ves que el script sincroniza `shareTarget` y corre `bubblewrap update`:
+1. **❌ DETENÉ el build inmediatamente** (Ctrl+C)
+2. **⚠️ Algo no aplicó bien el parche 0013 de seguridad**  
+3. **🚫 NO instalés el APK resultante** — tendrá el bug de instalación de vuelta
+
+#### 🔧 **Cómo forzar la guardia manualmente:**
+
+Si necesitás deshabilitar Web Share Target temporalmente:
+```bash
+# NO agregar shareTarget automáticamente (estado seguro)
+cd tango-cifrado-apk
+../scripts/apk/sync-share-target.sh
+```
+
+Si necesitás habilitarlo explícitamente (solo para debugging):
+```bash 
+# Agregar shareTarget (puede causar fallos de instalación)
+ALLOW_SHARE_TARGET=1 ../scripts/apk/sync-share-target.sh
+```
+
+### Por qué esta guardia es crítica
+
+Sin esta guardia, `sync-share-target.sh` detecta que `pwa/manifest.json` tiene `share_target` y `twa-manifest.json` no, y automáticamente copia el `shareTarget` — reintroduciendo en silencio el bug de instalación "There was a problem parsing the package" que se resolvió sacándolo (ver `TO_FIX.md` M-5).
+
+----
 
 ---
 

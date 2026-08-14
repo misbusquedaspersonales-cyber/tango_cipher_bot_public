@@ -118,13 +118,54 @@ KEYSTORE_FILE=~/tango-signing/android.keystore \
 - La primera vez descarga ~2-5 GB (Android SDK + Gradle). Las siguientes toman ~15s.
 - Los `.apk` y `.aab` quedan en `../dist/apk/`.
 
-### Paso 5 — Probar sideload en Android real
+#### ✅ Verificación post-build obligatoria
 
-1. Pasar `dist/apk/app-release-signed.apk` al teléfono (Telegram, USB, etc.)
-2. Abrir el archivo → Android pide habilitar "Fuentes desconocidas" → habilitar
+No confíes solo en el mensaje "BUILD SUCCESSFUL" — verificá el artefacto real:
+
+```bash
+python3 -c "
+from pyaxmlparser import APK
+apk = APK('dist/apk/app-release-signed.apk')
+print('Package:', apk.package)
+print('versionCode/versionName:', apk.version_code, '/', apk.version_name)
+print('minSdk/targetSdk:', apk.get_min_sdk_version(), '/', apk.get_target_sdk_version())
+print('Firmado v1/v2/v3:', apk.is_signed_v1(), apk.is_signed_v2(), apk.is_signed_v3())
+print('Web Share Target (SEND intent):', 'android.intent.action.SEND' in str(apk.get_android_manifest_xml()))
+"
+```
+
+**Resultado esperado:**
+- `Package: com.tangocifrado.app` ✅
+- `versionCode` > build anterior ✅  
+- `versionName` formato "X.Y.Z" ✅
+- `Firmado v1/v2/v3: True True True` ✅
+- **`Web Share Target: False`** ✅ — Si sale `True`, **NO distribuyas este APK** (bug M-5)
+
+> 💡 **Si falta pyaxmlparser:** `pip install pyaxmlparser --break-system-packages`
+
+### Paso 5 — Transferencia segura e instalación limpia
+
+#### ⚠️ Transferencia segura (evitar corrupción)
+**NO uses email (Outlook/Gmail)** — corrompe el archivo. Métodos verificados:
+- **Telegram** (Mensajes guardados)  
+- **Google Drive/Dropbox** → descargar en el teléfono
+- **USB directo** (adb push o cable)
+
+**Verificar integridad:**
+```bash
+# En PC: anotar el hash
+sha256sum dist/apk/app-release-signed.apk
+
+# En teléfono: confirmar que coincide  
+adb shell sha256sum /sdcard/Download/app-release-signed.apk
+```
+
+#### 🧹 Instalación limpia obligatoria
+1. **ANTES:** Desinstalar completamente cualquier "Tango Cifrado" previa (evita conflictos de firma)
+2. Abrir el `.apk` descargado → Android pide "Fuentes desconocidas" → habilitar
 3. Instalar → abrir
 4. **✅ Chequeo definitivo:** NO debe aparecer la barra de URL de Chrome.
-   Si aparece → el assetlinks no validó → volver al Paso 1.
+   Si aparece → assetlinks no validó → volver al Paso 1.
 
 ---
 

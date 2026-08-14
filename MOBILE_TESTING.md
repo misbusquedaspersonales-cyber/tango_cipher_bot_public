@@ -58,8 +58,99 @@ por acá.
    Esto además sincroniza automáticamente cualquier cambio en
    `pwa/manifest.json` (incluyendo `share_target`) hacia
    `twa-manifest.json` antes de compilar — ver
+
+## 🔍 Verificaciones post-build obligatorias
+
+Una vez que `build-apk.sh` termine sin errores, **no confíes automáticamente en que el `.apk` resultante esté bien** — hubo casos donde el script reportaba éxito pero la app tenía configuraciones incorrectas por bugs de sincronización (ver `TO_FIX.md` M-4 y M-5). Corré estas verificaciones **antes** de distribuir:
+
+### ✅ Verificación completa del APK generado
+
+No confíes solo en el mensaje de éxito del script — confirmá el artefacto real:
+
+```bash
+python3 -c "
+from pyaxmlparser import APK
+apk = APK('dist/apk/app-release-signed.apk')
+print('Package:', apk.package)
+print('versionCode/versionName:', apk.version_code, '/', apk.version_name)
+print('minSdk/targetSdk:', apk.get_min_sdk_version(), '/', apk.get_target_sdk_version())
+print('Firmado v1/v2/v3:', apk.is_signed_v1(), apk.is_signed_v2(), apk.is_signed_v3())
+print('Permite SEND intent:', 'android.intent.action.SEND' in str(apk.get_android_manifest_xml()))
+"
+```
+
+> 💡 **Si no tenés pyaxmlparser instalado:** `pip install pyaxmlparser --break-system-packages`
+
+**Resultado esperado:**
+| Campo | Valor esperado |
+|---|---|
+| `Package` | `com.tangocifrado.app` |
+| `versionCode` | Número mayor al build anterior |
+| `versionName` | Formato "X.Y.Z" consistente con `twa-manifest.json` |
+| `minSdk` / `targetSdk` | Consistentes entre sí, **no** strings vacíos `""` (ver TO_FIX.md M-4) |
+| Firmado v1/v2/v3 | `True`, `True`, `True` |
+| **Permite SEND intent** | **`False`** — Si sale `True`, el intent-filter problemático de Web Share Target volvió; **NO distribuyas este APK** |
+
+### ✅ Archivo existe con tamaño correcto
+
+```bash
+ls -la dist/apk/app-release-signed.apk
+```
+
+**Resultado esperado:** archivo de ~1-2 MB con timestamp reciente.
+
+---
    `scripts/apk/sync-share-target.sh`.
-2. Pasar `dist/apk/app-release-signed.apk` al teléfono (Telegram, USB, Drive, etc.).
+
+## 🚚 Transferencia segura del APK al dispositivo
+
+**⚠️ CRÍTICO:** **NO uses email (Outlook, Gmail)** — confirmado que corrompe el archivo en tránsito. Usá uno de estos métodos verificados:
+
+### ✅ Métodos seguros confirmados
+- **Telegram** (a vos mismo, "Mensajes guardados")
+- **Google Drive / Dropbox** → descargar desde el navegador del teléfono
+- **USB directo** (`adb push`, o cable + copiar/pegar)
+- **WeTransfer, ShareIt** u otros servicios de transferencia directa
+
+### ✅ Verificación de integridad obligatoria
+
+Después de transferir, **siempre verificá que el archivo llegó intacto** comparando hashes:
+
+**En la PC (antes de enviar):**
+```bash
+sha256sum dist/apk/app-release-signed.apk
+```
+
+**En el teléfono (después de recibir):**
+```bash
+adb shell sha256sum /sdcard/Download/app-release-signed.apk
+```
+
+**Los hashes DEBEN coincidir exactamente.** Si no coinciden:
+- ❌ El archivo se corrompió en el transporte
+- 🔁 Probá con otro método de transferencia
+- ⚠️ **NO instales un APK con hash incorrecto**
+
+---
+
+2. Pasar `dist/apk/app-release-signed.apk` al teléfono usando uno de los métodos seguros de arriba.
+
+## 🧹 Instalación limpia obligatoria
+
+**⚠️ ANTES de instalar: desinstalar completamente cualquier versión previa** de "Tango Cifrado" si ya la tenías instalada. Esto evita dos problemas distintos:
+
+### ✅ Por qué desinstalar primero
+- **Conflicto de firma:** Si en algún momento se usó otra keystore, Android muestra "There was a problem parsing the package" en lugar del mensaje de conflicto más claro
+- **Intent-filters obsoletos:** Cambios nativos como Web Share Target no se actualizan sobre instalación existente, a diferencia del contenido PWA
+- **Configuración limpia:** Evita retener configuraciones inconsistentes de builds anteriores
+
+### ✅ Cómo desinstalar completamente
+1. **Ajustes** → **Aplicaciones** → buscar "Tango Cifrado" → **Desinstalar**
+2. O: mantener presionado el ícono de la app → **Desinstalar** 
+3. Confirmar que desaparece de la pantalla de inicio
+
+---
+
 3. Abrir el archivo → Android pide habilitar "Fuentes desconocidas" → habilitar.
 4. Instalar → abrir.
 5. **Si ya tenías una versión previa instalada**, desinstalala primero o instalá encima (mismo `packageId` + misma keystore = update válido). Cambios nativos como Web Share Target **no llegan solos** — a diferencia del contenido de la PWA (`app.js`, etc.), que sí se actualiza solo porque se sirve desde GitHub Pages.
@@ -293,6 +384,15 @@ Estos dos puntos no son cubiertos por tests automatizados y deben verificarse ma
 > de la misma forma para una PWA instalada vía navegador. Si corrés este
 > checklist sobre la versión de Chrome y no aparece la app en "Compartir",
 > **eso es esperado** y no es un bug — repetí sobre el `.apk`.
+
+> 🔴 **Esta sección entera es para el build EXPERIMENTAL, no el recomendado.**
+> El APK que se compila con los pasos normales de `build-apk.sh` /
+> `PASOS_APK.md` ya NO incluye Web Share Target (ver M-5 en `TO_FIX.md`) —
+> compilalo con `ALLOW_SHARE_TARGET=1 ../scripts/apk/build-apk.sh` para que
+> este checklist tenga sentido. Si probás esta sección sobre el APK
+> recomendado por defecto, "Tango Cifrado" no va a aparecer en el menú de
+> Compartir — **eso es lo esperado ahora**, no el bug que este checklist
+> intenta cazar.
 
 **Pre-requisito:** compilaste el APK con `build-apk.sh` *después* de que
 `sync-share-target.sh` corriera sin errores (lo hace automáticamente, ver
