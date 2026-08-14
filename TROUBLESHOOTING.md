@@ -572,6 +572,16 @@ Después de actualizar el código con cambios en la estructura de la interfaz de
 
 Cuando se instala una PWA como aplicación standalone en Android, el navegador Chrome cachea agresivamente los recursos de la interfaz. Para cambios **estructurales** importantes (no solo contenido del bundle cifrado), puede ser necesario limpiar completamente el almacenamiento de la aplicación.
 
+### Atajo — botón en la app (probá esto primero)
+
+Desde la versión con `initMaintenance()`, la propia app tiene un botón que hace
+exactamente lo mismo que las opciones A/B/C de más abajo, sin salir de la app:
+**Ajustes → Mantenimiento ▾ → "Vaciar caché y reiniciar"**. Pide confirmación
+porque también borra el corpus desbloqueado (vas a re-ingresar la CLAVE_DESPLIEGUE)
+y las credenciales de Telegram guardadas sin PIN. Si el botón no está disponible
+(versión vieja de la app, todavía sin este parche) o no resuelve el problema,
+seguí con las opciones manuales de abajo.
+
 ### Cuándo aplicar esta solución
 
 **Aplica cuando:**

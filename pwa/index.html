@@ -424,6 +424,22 @@
       </div>
     </div>
 
+    <div class="card">
+      <button type="button" class="link" id="maintenance-toggle">Mantenimiento ▾</button>
+      <div id="maintenance-panel" hidden>
+        <p class="muted">
+          Si acabás de instalar una versión nueva y la app sigue mostrando
+          contenido viejo (pantallas, botones o textos desactualizados),
+          usá esto en vez de los pasos manuales de TROUBLESHOOTING.md.
+        </p>
+        <button type="button" id="clear-cache-button" style="width:100%;">Vaciar caché y reiniciar</button>
+        <p class="muted" style="margin-top:4px;">
+          Vas a tener que ingresar la clave de despliegue de nuevo después de esto.
+        </p>
+        <p class="status" id="maintenance-status" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+
     <footer class="hint">
       Si esta pantalla vuelve a pedir la clave de despliegue, es porque se borraron los datos del navegador — ver TROUBLESHOOTING.md.
     </footer>

@@ -538,6 +538,95 @@ function initSecuritySettings() {
   $('#disable-pin-button').addEventListener('click', handleDisablePin);
 }
 
+// ---------- maintenance: full local reset (replaces manual TROUBLESHOOTING.md steps) ----------
+//
+// Does everything Opción A/B de TROUBLESHOOTING.md hacen a mano:
+//   1. Desregistra el/los Service Worker(s) activos.
+//   2. Borra TODOS los buckets de Cache Storage (shell/bundle/runtime, cualquier
+//      CACHE_VERSION -- no hace falta saber el nombre exacto, se listan todos).
+//   3. Borra las dos bases de IndexedDB: 'tango-cifrado-vault' (corpus/SALT
+//      desbloqueados + credenciales Telegram) y 'TangoCifradoSharedFiles'
+//      (buffer de Web Share Target).
+//   4. Borra localStorage (incluye BUNDLE_GENERATED_AT_KEY y el resto de flags).
+//   5. Recarga forzando bypass de HTTP cache, para que el próximo Service
+//      Worker se instale desde cero -- mismo efecto que un hard-refresh.
+//
+// Deliberadamente NO es silencioso: pide confirmación porque borra el corpus
+// desbloqueado (haría falta re-ingresar CLAVE_DESPLIEGUE) y cualquier
+// credencial de Telegram guardada sin PIN activado.
+async function clearAllLocalStateAndReload() {
+  const statusEl = $('#maintenance-status');
+  setStatus(statusEl, 'Vaciando caché…', 'info');
+
+  const errors = [];
+
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+  } catch (err) {
+    errors.push(`Service Worker: ${err.message}`);
+  }
+
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch (err) {
+    errors.push(`Cache Storage: ${err.message}`);
+  }
+
+  for (const dbName of ['tango-cifrado-vault', 'TangoCifradoSharedFiles']) {
+    try {
+      await new Promise((resolve, reject) => {
+        const req = indexedDB.deleteDatabase(dbName);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error || new Error(`No se pudo borrar ${dbName}`));
+        // onblocked: otra pestaña con la DB abierta. No es fatal -- seguimos
+        // igual, el reload de más abajo suele liberarla.
+        req.onblocked = () => resolve();
+      });
+    } catch (err) {
+      errors.push(`IndexedDB ${dbName}: ${err.message}`);
+    }
+  }
+
+  try {
+    localStorage.clear();
+  } catch (err) {
+    errors.push(`localStorage: ${err.message}`);
+  }
+
+  if (errors.length) {
+    // No abortamos el reload por esto -- lo importante (SW + caches) ya
+    // corrió. Mostramos igual para que quede algo en pantalla si el
+    // reload tarda o el usuario mira la consola después.
+    console.warn('[maintenance] limpieza parcial, continuando de todos modos:', errors);
+  }
+
+  setStatus(statusEl, 'Listo. Reiniciando…', 'success');
+  // location.reload() solo no alcanza si el navegador sirve el documento
+  // principal desde su caché HTTP -- forzamos con timestamp para bypassear.
+  window.location.href = window.location.pathname + '?_reset=' + Date.now();
+}
+
+function initMaintenance() {
+  $('#maintenance-toggle').addEventListener('click', () => {
+    $('#maintenance-panel').hidden = !$('#maintenance-panel').hidden;
+  });
+
+  $('#clear-cache-button').addEventListener('click', () => {
+    const ok = window.confirm(
+      'Esto va a borrar el corpus desbloqueado, las credenciales de Telegram guardadas ' +
+      'y todo el caché de la app. Vas a tener que ingresar la clave de despliegue de ' +
+      'nuevo. ¿Continuar?'
+    );
+    if (ok) clearAllLocalStateAndReload();
+  });
+}
+
 async function handleEnablePin(event) {
   event.preventDefault();
   const statusEl = $('#security-status');
@@ -807,6 +896,7 @@ async function init() {
   });
   initSettings();
   initSecuritySettings();
+  initMaintenance();
 
   vaultMode = getVaultMode();
 
